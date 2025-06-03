@@ -1,0 +1,127 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background: #f9f9f9;
+  color: #333;
+}
+
+.header {
+  margin-bottom: 15px;
+}
+
+button {
+  margin-right: 10px;
+  padding: 8px 15px;
+  font-size: 14px;
+  cursor: pointer;
+  background-color: #6366f1;
+  border: none;
+  color: white;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #4f46e5;
+}
+
+#expense-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+  margin-top: 10px;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
+}
+
+.delete-check {
+  margin-top: 25px;
+  transform: scale(1.3);
+  cursor: pointer;
+}
+
+.row > div {
+  flex: 1;
+  min-width: 100px;
+  display: flex;
+  flex-direction: column;
+}
+
+.row label {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: #555;
+}
+
+.row input[type="text"],
+.row input[type="number"],
+.row input[type="date"],
+.row select {
+  padding: 6px 8px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.3s ease;
+}
+
+.row input[type="text"]:focus,
+.row input[type="number"]:focus,
+.row input[type="date"]:focus,
+.row select:focus {
+  border-color: #6366f1;
+  outline: none;
+}
+
+.status {
+  margin-top: 22px;
+  font-weight: 600;
+  text-align: center;
+  width: 100px;
+  border-radius: 6px;
+  padding: 6px 0;
+  color: white;
+}
+
+.status.quitado {
+  background-color: #10b981; /* verde */
+}
+
+.status.pendente {
+  background-color: #ef4444; /* vermelho */
+}
+
+.card {
+  background: white;
+  max-width: 900px;
+  margin: 20px 0;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.1);
+}
+
+.full-width {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .delete-check {
+    margin-top: 0;
+  }
+}

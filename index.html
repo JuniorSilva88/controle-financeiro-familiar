@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard de Despesas Simples</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <div class="header">
+    <button id="add-btn">Adicionar Despesa</button>
+    <button id="remove-btn">Remover Selecionadas</button>
+  </div>
+
+  <div id="expense-list"></div>
+
+  <div class="card full-width">
+    <p id="total-original">Total Original: R$ 0.00</p>
+    <p id="total-negociado">Total Negociado: R$ 0.00</p>
+    <p id="total-quitadas">Despesas Quitadas: 0 de 0</p>
+  </div>
+
+  <div class="card full-width">
+    <canvas id="barChart"></canvas>
+  </div>
+
+  <div class="card full-width">
+    <canvas id="pieChart"></canvas>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
