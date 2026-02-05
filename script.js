@@ -1,181 +1,177 @@
-// Referências aos botões e container da lista
-const addBtn = document.getElementById('add-btn');
-const removeBtn = document.getElementById('remove-btn');
-const listContainer = document.getElementById('expense-list');
+const STORAGE_KEY = 'despesas_dashboard_ok';
 
-let despesas = []; // Array para armazenar despesas
+const CATEGORIAS = {
+  Moradia: '#6366f1',
+  Saúde: '#10b981',
+  Educação: '#f59e0b',
+  Alimentação: '#ef4444',
+  Transporte: '#0ea5e9',
+  Outros: '#64748b'
+};
 
-// Cria uma linha de despesa com labels e inputs
-function criarLinha(despesa, index) {
-  const row = document.createElement('div');
-  row.className = 'row';
+let despesas = [];
+let chart = null;
+let chartType = 'bar';
+let despesaSelecionada = null;
 
-  // Checkbox para selecionar despesa para remoção
-  const divCheck = document.createElement('div');
-  const check = document.createElement('input');
-  check.type = 'checkbox';
-  check.className = 'delete-check';
-  check.dataset.index = index;
-  divCheck.appendChild(check);
-  row.appendChild(divCheck);
-
-  // Função auxiliar para criar input com label
-  function criarCampo(labelText, type, value, options) {
-    const div = document.createElement('div');
-    const label = document.createElement('label');
-    label.textContent = labelText;
-    const input = (type === 'select') ? document.createElement('select') : document.createElement('input');
-
-    if (type === 'select') {
-      options.forEach(opt => {
-        const option = document.createElement('option');
-        option.value = opt.value;
-        option.textContent = opt.text;
-        if (opt.value === value) option.selected = true;
-        input.appendChild(option);
-      });
-    } else {
-      input.type = type;
-      input.value = value;
-    }
-
-    div.appendChild(label);
-    div.appendChild(input);
-    return { div, input };
-  }
-
-  // Campos da despesa
-  const nomeCampo = criarCampo('Nome', 'text', despesa.nome);
-  const valorCampo = criarCampo('Valor Original', 'number', despesa.valor);
-  const negociadoCampo = criarCampo('Valor Negociado', 'number', despesa.negociado);
-  const dataCampo = criarCampo('Data', 'date', despesa.data);
-  const parceladaCampo = criarCampo('Parcelada', 'select', despesa.parcelada, [
-    { value: 'Não', text: 'Não' },
-    { value: 'Sim', text: 'Sim' }
-  ]);
-  const parcelasCampo = criarCampo('Parcelas', 'number', despesa.parcelas);
-
-  // Status da despesa: quitado ou pendente
-  const statusSpan = document.createElement('span');
-  statusSpan.className = 'status ' + (despesa.negociado >= despesa.valor ? 'quitado' : 'pendente');
-  statusSpan.textContent = despesa.negociado >= despesa.valor ? 'Quitado' : 'Pendente';
-
-  // Adiciona campos à linha
-  row.appendChild(nomeCampo.div);
-  row.appendChild(valorCampo.div);
-  row.appendChild(negociadoCampo.div);
-  row.appendChild(dataCampo.div);
-  row.appendChild(parceladaCampo.div);
-  row.appendChild(parcelasCampo.div);
-  row.appendChild(statusSpan);
-
-  // Atualiza os dados quando algum campo mudar
-  [nomeCampo.input, valorCampo.input, negociadoCampo.input, dataCampo.input, parceladaCampo.input, parcelasCampo.input].forEach(input => {
-    input.addEventListener('change', () => {
-      despesas[index] = {
-        nome: nomeCampo.input.value,
-        valor: parseFloat(valorCampo.input.value) || 0,
-        negociado: parseFloat(negociadoCampo.input.value) || 0,
-        data: dataCampo.input.value,
-        parcelada: parceladaCampo.input.value,
-        parcelas: parseInt(parcelasCampo.input.value) || 0,
-      };
-      renderizar();
-    });
-  });
-
-  return row;
+/* ---------- STORAGE ---------- */
+function salvar() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(despesas));
 }
 
-// Renderiza todas as despesas na tela
-function renderizar() {
-  listContainer.innerHTML = '';
-  despesas.forEach((desp, idx) => {
-    listContainer.appendChild(criarLinha(desp, idx));
-  });
-  atualizarResumo();
-  atualizarGraficos();
+function carregar() {
+  const d = localStorage.getItem(STORAGE_KEY);
+  despesas = d ? JSON.parse(d) : [];
 }
 
-// Atualiza os totais e status no resumo
-function atualizarResumo() {
-  const totalOriginal = despesas.reduce((acc, d) => acc + d.valor, 0);
-  const totalNegociado = despesas.reduce((acc, d) => acc + d.negociado, 0);
-  const quitadas = despesas.filter(d => d.negociado >= d.valor).length;
-
-  document.getElementById('total-original').textContent = `Total Original: R$ ${totalOriginal.toFixed(2)}`;
-  document.getElementById('total-negociado').textContent = `Total Negociado: R$ ${totalNegociado.toFixed(2)}`;
-  document.getElementById('total-quitadas').textContent = `Despesas Quitadas: ${quitadas} de ${despesas.length}`;
+/* ---------- HELPERS ---------- */
+function mesAtual() {
+  return new Date().toISOString().slice(0, 7);
 }
 
-let barChart, pieChart;
+/* ---------- FORM ---------- */
+const nome = document.getElementById('nome');
+const valor = document.getElementById('valor');
+const parcelado = document.getElementById('parcelado');
+const parcelas = document.getElementById('parcelas');
+const mes = document.getElementById('mes');
+const categoria = document.getElementById('categoria');
 
-// Atualiza os gráficos com Chart.js
-function atualizarGraficos() {
-  const ctxBar = document.getElementById('barChart').getContext('2d');
-  const ctxPie = document.getElementById('pieChart').getContext('2d');
+parcelado.onchange = () => {
+  parcelas.disabled = parcelado.value !== 'sim';
+};
 
-  const labels = despesas.map(d => d.nome || '(sem nome)');
-  const valores = despesas.map(d => d.valor);
-  const negociados = despesas.map(d => d.negociado);
+/* ---------- ADD ---------- */
+document.getElementById('add-btn').onclick = () => {
+  if (!nome.value || !valor.value) return alert('Preencha descrição e valor');
 
-  const quitadas = despesas.filter(d => d.negociado >= d.valor).length;
-  const pendentes = despesas.length - quitadas;
-
-  if (barChart) barChart.destroy();
-  barChart = new Chart(ctxBar, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Valor', data: valores, backgroundColor: '#6366f1' },
-        { label: 'Negociado', data: negociados, backgroundColor: '#10b981' }
-      ]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        x: { ticks: { autoSkip: false } },
-        y: { beginAtZero: true }
-      }
-    }
-  });
-
-  if (pieChart) pieChart.destroy();
-  pieChart = new Chart(ctxPie, {
-    type: 'pie',
-    data: {
-      labels: ['Quitadas', 'Pendentes'],
-      datasets: [{ data: [quitadas, pendentes], backgroundColor: ['#10b981', '#ef4444'] }]
-    },
-    options: { responsive: true }
-  });
-}
-
-// Adiciona nova despesa vazia ao clicar em "Adicionar Despesa"
-addBtn.addEventListener('click', () => {
   despesas.push({
-    nome: '',
-    valor: 0,
-    negociado: 0,
-    data: '',
-    parcelada: 'Não',
-    parcelas: 0
+    nome: nome.value,
+    valor: Number(valor.value),
+    parcelado: parcelado.value === 'sim',
+    parcelas: Number(parcelas.value) || 1,
+    mes: mes.value,
+    categoria: categoria.value,
+    confirmada: true
   });
-  renderizar();
-});
 
-// Remove despesas selecionadas ao clicar em "Remover Selecionadas"
-removeBtn.addEventListener('click', () => {
-  const checkboxes = document.querySelectorAll('.delete-check:checked');
-  const indices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.index));
-  despesas = despesas.filter((_, idx) => !indices.includes(idx));
-  renderizar();
-});
+  salvar();
+  limparFormulario();
+  render();
+};
 
-// Inicializa a interface com uma despesa de exemplo
-despesas = [
-  { nome: 'Internet', valor: 120, negociado: 120, data: '2025-06-01', parcelada: 'Não', parcelas: 0 }
-];
+function limparFormulario() {
+  nome.value = '';
+  valor.value = '';
+  parcelas.value = '';
+  parcelado.value = 'nao';
+  parcelas.disabled = true;
+}
 
-renderizar();
+/* ---------- GRÁFICO ---------- */
+const monthFilter = document.getElementById('month-filter');
+const toggleChartBtn = document.getElementById('toggle-chart');
+
+function renderGrafico() {
+  const ctx = document.getElementById('chart');
+  if (chart) chart.destroy();
+
+  const lista = despesas.filter(d => d.mes === monthFilter.value);
+  if (lista.length === 0) return;
+
+  if (chartType === 'bar') {
+    chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: lista.map(d => d.nome),
+        datasets: [{
+          data: lista.map(d => d.valor),
+          backgroundColor: lista.map(d => CATEGORIAS[d.categoria])
+        }]
+      },
+      options: {
+        onClick: (_, els) => {
+          if (!els.length) return;
+          abrirModal(lista[els[0].index]);
+        }
+      }
+    });
+  } else {
+    const soma = {};
+    lista.forEach(d => soma[d.categoria] = (soma[d.categoria] || 0) + d.valor);
+
+    chart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: Object.keys(soma),
+        datasets: [{
+          data: Object.values(soma),
+          backgroundColor: Object.keys(soma).map(c => CATEGORIAS[c])
+        }]
+      }
+    });
+  }
+}
+
+/* ---------- MODAL ---------- */
+const editModal = document.getElementById('edit-modal');
+const editNome = document.getElementById('edit-nome');
+const editValor = document.getElementById('edit-valor');
+const editParcelas = document.getElementById('edit-parcelas');
+const editCategoria = document.getElementById('edit-categoria');
+
+function abrirModal(d) {
+  despesaSelecionada = d;
+  editNome.value = d.nome;
+  editValor.value = d.valor;
+  editParcelas.value = d.parcelas;
+  editCategoria.value = d.categoria;
+  editModal.classList.remove('hidden');
+}
+
+document.getElementById('save-edit').onclick = () => {
+  despesaSelecionada.nome = editNome.value;
+  despesaSelecionada.valor = Number(editValor.value);
+  despesaSelecionada.parcelas = Number(editParcelas.value);
+  despesaSelecionada.categoria = editCategoria.value;
+  salvar();
+  fecharModal();
+  render();
+};
+
+document.getElementById('delete-edit').onclick = () => {
+  if (!confirm('Excluir esta despesa?')) return;
+  despesas = despesas.filter(d => d !== despesaSelecionada);
+  salvar();
+  fecharModal();
+  render();
+};
+
+document.getElementById('cancel-edit').onclick = fecharModal;
+
+function fecharModal() {
+  despesaSelecionada = null;
+  editModal.classList.add('hidden');
+}
+
+editModal.onclick = e => {
+  if (e.target === editModal) fecharModal();
+};
+
+/* ---------- UI ---------- */
+toggleChartBtn.onclick = () => {
+  chartType = chartType === 'bar' ? 'pie' : 'bar';
+  renderGrafico();
+};
+
+monthFilter.onchange = renderGrafico;
+
+/* ---------- INIT ---------- */
+carregar();
+monthFilter.value = mesAtual();
+mes.value = mesAtual();
+renderGrafico();
+
+function render() {
+  renderGrafico();
+}
