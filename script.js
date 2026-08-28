@@ -32,6 +32,7 @@ function mesAtual() {
 /* ---------- FORM ---------- */
 const nome = document.getElementById('nome');
 const valor = document.getElementById('valor');
+const tipo = document.getElementById('tipo');
 const parcelado = document.getElementById('parcelado');
 const parcelas = document.getElementById('parcelas');
 const mes = document.getElementById('mes');
@@ -48,6 +49,7 @@ document.getElementById('add-btn').onclick = () => {
   despesas.push({
     nome: nome.value,
     valor: Number(valor.value),
+    tipo: tipo.value,
     parcelado: parcelado.value === 'sim',
     parcelas: Number(parcelas.value) || 1,
     mes: mes.value,
@@ -63,6 +65,7 @@ document.getElementById('add-btn').onclick = () => {
 function limparFormulario() {
   nome.value = '';
   valor.value = '';
+  tipo.value = 'Fixa';
   parcelas.value = '';
   parcelado.value = 'nao';
   parcelas.disabled = true;
@@ -71,12 +74,27 @@ function limparFormulario() {
 /* ---------- GRÁFICO ---------- */
 const monthFilter = document.getElementById('month-filter');
 const toggleChartBtn = document.getElementById('toggle-chart');
+const totalDisplay = document.getElementById('total-display');
+const totalFixasDisplay = document.getElementById('total-fixas');
+const totalVariaveisDisplay = document.getElementById('total-variaveis');
 
 function renderGrafico() {
   const ctx = document.getElementById('chart');
   if (chart) chart.destroy();
 
   const lista = despesas.filter(d => d.mes === monthFilter.value);
+  
+  // Update total display
+  const totalFixas = lista.filter(d => d.tipo === 'Fixa').reduce((acc, curr) => acc + curr.valor, 0);
+  const totalVariaveis = lista.filter(d => d.tipo === 'Variável').reduce((acc, curr) => acc + curr.valor, 0);
+  const total = totalFixas + totalVariaveis;
+
+  const formatCurrency = val => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+  if (totalDisplay) totalDisplay.innerText = formatCurrency(total);
+  if (totalFixasDisplay) totalFixasDisplay.innerText = formatCurrency(totalFixas);
+  if (totalVariaveisDisplay) totalVariaveisDisplay.innerText = formatCurrency(totalVariaveis);
+
   if (lista.length === 0) return;
 
   if (chartType === 'bar') {
@@ -117,6 +135,7 @@ function renderGrafico() {
 const editModal = document.getElementById('edit-modal');
 const editNome = document.getElementById('edit-nome');
 const editValor = document.getElementById('edit-valor');
+const editTipo = document.getElementById('edit-tipo');
 const editParcelas = document.getElementById('edit-parcelas');
 const editCategoria = document.getElementById('edit-categoria');
 
@@ -124,6 +143,7 @@ function abrirModal(d) {
   despesaSelecionada = d;
   editNome.value = d.nome;
   editValor.value = d.valor;
+  editTipo.value = d.tipo || 'Fixa';
   editParcelas.value = d.parcelas;
   editCategoria.value = d.categoria;
   editModal.classList.remove('hidden');
@@ -132,6 +152,7 @@ function abrirModal(d) {
 document.getElementById('save-edit').onclick = () => {
   despesaSelecionada.nome = editNome.value;
   despesaSelecionada.valor = Number(editValor.value);
+  despesaSelecionada.tipo = editTipo.value;
   despesaSelecionada.parcelas = Number(editParcelas.value);
   despesaSelecionada.categoria = editCategoria.value;
   salvar();
@@ -174,4 +195,56 @@ renderGrafico();
 
 function render() {
   renderGrafico();
+}
+
+/* ---------- CONFIGURAÇÕES DE TEMA ---------- */
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const closeSettings = document.getElementById('close-settings');
+const themeBtns = document.querySelectorAll('[data-theme-btn]');
+
+const currentTheme = localStorage.getItem('app-theme') || 'indigo';
+setTheme(currentTheme);
+
+if (settingsBtn) {
+  settingsBtn.addEventListener('click', () => {
+    settingsModal.classList.remove('hidden');
+  });
+}
+
+if (closeSettings) {
+  closeSettings.addEventListener('click', () => {
+    settingsModal.classList.add('hidden');
+  });
+}
+
+if (settingsModal) {
+  settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+      settingsModal.classList.add('hidden');
+    }
+  });
+}
+
+themeBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const theme = btn.getAttribute('data-theme-btn');
+    setTheme(theme);
+  });
+});
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('app-theme', theme);
+  
+  // Atualizar interface dos botões
+  themeBtns.forEach(btn => {
+    if (btn.getAttribute('data-theme-btn') === theme) {
+      btn.classList.add('ring-slate-400');
+      btn.classList.remove('ring-transparent');
+    } else {
+      btn.classList.remove('ring-slate-400');
+      btn.classList.add('ring-transparent');
+    }
+  });
 }

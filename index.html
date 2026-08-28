@@ -1,96 +1,248 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="h-full antialiased">
 <head>
   <meta charset="UTF-8" />
   <title>Dashboard de Despesas</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
+<body class="h-full text-slate-800 bg-slate-50 flex flex-col">
 
-<header class="topbar">
-  <h1>Despesas</h1>
+<!-- Top Navigation -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between h-16 items-center">
+      <div class="flex items-center gap-3">
+        <div class="bg-primary-600 p-2 rounded-lg">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-tight">Finanças</h1>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
+          <input type="month" id="month-filter" class="bg-transparent text-sm font-medium text-slate-700 px-3 py-1 outline-none cursor-pointer">
+        </div>
+        <button id="settings-btn" class="text-slate-500 hover:text-slate-700 p-2 rounded-lg hover:bg-slate-100 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </div>
 </header>
 
-<main class="container">
-
-  <!-- FORMULÁRIO DE INCLUSÃO -->
-  <section class="card">
-    <h3>Nova despesa</h3>
-
-    <div class="form-grid">
-      <input id="nome" placeholder="Descrição">
-      <input id="valor" type="number" placeholder="Valor">
-
-      <select id="parcelado">
-        <option value="nao">À vista</option>
-        <option value="sim">Parcelado</option>
-      </select>
-
-      <input id="parcelas" type="number" placeholder="Parcelas" disabled>
-
-      <input id="mes" type="month">
-
-      <select id="categoria">
-        <option>Moradia</option>
-        <option>Saúde</option>
-        <option>Educação</option>
-        <option>Alimentação</option>
-        <option>Transporte</option>
-        <option>Outros</option>
-      </select>
+<main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+  
+  <!-- Dashboard Header / Overview -->
+  <div class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <h2 class="text-2xl font-bold text-slate-900">Visão Geral</h2>
+      <p class="text-sm text-slate-500 mt-1">Acompanhe seus gastos no mês selecionado.</p>
     </div>
+    <div class="flex flex-wrap gap-4">
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 min-w-[200px]">
+        <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Fixas</p>
+          <p class="text-lg font-bold text-slate-900" id="total-fixas">R$ 0,00</p>
+        </div>
+      </div>
+      
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 min-w-[200px]">
+        <div class="p-2.5 bg-amber-50 text-amber-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Variáveis</p>
+          <p class="text-lg font-bold text-slate-900" id="total-variaveis">R$ 0,00</p>
+        </div>
+      </div>
 
-    <button id="add-btn">Adicionar despesa</button>
-  </section>
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 min-w-[200px]">
+        <div class="p-2.5 bg-red-50 text-red-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Geral</p>
+          <p class="text-lg font-bold text-slate-900" id="total-display">R$ 0,00</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  <!-- CONTROLES DO GRÁFICO -->
-  <section class="chart-controls">
-    <input type="month" id="month-filter">
-    <button id="toggle-chart">Trocar gráfico</button>
-  </section>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <!-- LEFT COLUMN: Chart -->
+    <section class="lg:col-span-2 flex flex-col gap-6">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full min-h-[400px]">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <h3 class="font-semibold text-slate-800">Distribuição de Gastos</h3>
+          <button id="toggle-chart" class="text-sm font-medium text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-1.5 rounded-md transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+            Trocar visualização
+          </button>
+        </div>
+        <div class="p-6 flex-1 flex items-center justify-center relative">
+          <canvas id="chart" class="max-h-[350px] w-full"></canvas>
+        </div>
+      </div>
+    </section>
 
-  <!-- GRÁFICO -->
-  <section class="card">
-    <canvas id="chart"></canvas>
-  </section>
+    <!-- RIGHT COLUMN: Form -->
+    <section class="flex flex-col gap-6">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <h3 class="font-semibold text-slate-800">Adicionar Despesa</h3>
+        </div>
+        
+        <div class="p-6 flex flex-col gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
+            <input id="nome" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Ex: Conta de Luz">
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
+              <input id="valor" type="number" step="0.01" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="0.00">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Tipo</label>
+              <select id="tipo" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
+                <option value="Fixa">Fixa</option>
+                <option value="Variável">Variável</option>
+              </select>
+            </div>
+          </div>
 
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Pagamento</label>
+              <select id="parcelado" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
+                <option value="nao">À vista</option>
+                <option value="sim">Parcelado</option>
+              </select>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Parcelas</label>
+              <input id="parcelas" type="number" min="1" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400" placeholder="1" disabled>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Mês</label>
+              <input id="mes" type="month" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white cursor-pointer">
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Categoria</label>
+              <select id="categoria" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
+                <option>Moradia</option>
+                <option>Saúde</option>
+                <option>Educação</option>
+                <option>Alimentação</option>
+                <option>Transporte</option>
+                <option>Outros</option>
+              </select>
+            </div>
+          </div>
+
+          <button id="add-btn" class="mt-2 w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex justify-center items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            Adicionar Registro
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
 </main>
 
 <!-- MODAL DE EDIÇÃO -->
-<div id="edit-modal" class="modal hidden">
-  <div class="modal-content">
-    <h3>Editar despesa</h3>
+<div id="edit-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+      <h3 class="font-bold text-slate-800 text-lg">Editar despesa</h3>
+      <button onclick="document.getElementById('cancel-edit').click()" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    
+    <div class="p-6 flex flex-col gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
+        <input id="edit-nome" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+      </div>
 
-    <label>Descrição</label>
-    <input id="edit-nome">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Valor</label>
+          <input type="number" id="edit-valor" step="0.01" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Tipo</label>
+          <select id="edit-tipo" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
+            <option value="Fixa">Fixa</option>
+            <option value="Variável">Variável</option>
+          </select>
+        </div>
+      </div>
 
-    <label>Valor</label>
-    <input type="number" id="edit-valor">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Parcelas</label>
+          <input type="number" id="edit-parcelas" min="1" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Categoria</label>
+          <select id="edit-categoria" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
+            <option>Moradia</option>
+            <option>Saúde</option>
+            <option>Educação</option>
+            <option>Alimentação</option>
+            <option>Transporte</option>
+            <option>Outros</option>
+          </select>
+        </div>
+      </div>
+    </div>
 
-    <label>Parcelas</label>
-    <input type="number" id="edit-parcelas">
-
-    <label>Categoria</label>
-    <select id="edit-categoria">
-      <option>Moradia</option>
-      <option>Saúde</option>
-      <option>Educação</option>
-      <option>Alimentação</option>
-      <option>Transporte</option>
-      <option>Outros</option>
-    </select>
-
-    <div class="modal-actions">
-      <button id="save-edit">Salvar</button>
-      <button id="delete-edit" class="danger">Excluir</button>
-      <button id="cancel-edit">Cancelar</button>
+    <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+      <button id="delete-edit" class="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">Excluir</button>
+      <button id="cancel-edit" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors">Cancelar</button>
+      <button id="save-edit" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors">Salvar</button>
     </div>
   </div>
 </div>
 
-<script src="script.js"></script>
+<!-- MODAL DE CONFIGURAÇÕES -->
+<div id="settings-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
+    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+      <h3 class="font-bold text-slate-800 text-lg">Configurações</h3>
+      <button id="close-settings" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    <div class="p-6">
+      <label class="block text-sm font-medium text-slate-700 mb-4">Cor do Tema Principal</label>
+      <div class="flex gap-4">
+        <button data-theme-btn="indigo" class="w-10 h-10 rounded-full bg-[#4f46e5] ring-2 ring-offset-2 ring-transparent focus:outline-none transition-all shadow-sm"></button>
+        <button data-theme-btn="emerald" class="w-10 h-10 rounded-full bg-[#059669] ring-2 ring-offset-2 ring-transparent focus:outline-none transition-all shadow-sm"></button>
+        <button data-theme-btn="rose" class="w-10 h-10 rounded-full bg-[#e11d48] ring-2 ring-offset-2 ring-transparent focus:outline-none transition-all shadow-sm"></button>
+        <button data-theme-btn="amber" class="w-10 h-10 rounded-full bg-[#d97706] ring-2 ring-offset-2 ring-transparent focus:outline-none transition-all shadow-sm"></button>
+        <button data-theme-btn="blue" class="w-10 h-10 rounded-full bg-[#2563eb] ring-2 ring-offset-2 ring-transparent focus:outline-none transition-all shadow-sm"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="script.js"></script>
 </body>
 </html>
