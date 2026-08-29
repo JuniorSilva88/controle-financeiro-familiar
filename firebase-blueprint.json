@@ -1,0 +1,80 @@
+{
+  "projectInfo": {
+    "name": "Controle Financeiro",
+    "description": "Dashboard de despesas pessoais com categorias, tipos e persistência em nuvem"
+  },
+  "roles": [
+    {
+      "name": "owner",
+      "description": "The user who created the record."
+    }
+  ],
+  "collections": [
+    {
+      "name": "despesas",
+      "description": "Armazena os registros de despesas dos usuários",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "string",
+          "description": "Firebase Auth UID do dono do registro",
+          "required": true
+        },
+        {
+          "name": "nome",
+          "type": "string",
+          "description": "Descrição da despesa",
+          "required": true
+        },
+        {
+          "name": "valor",
+          "type": "number",
+          "description": "Valor financeiro",
+          "required": true
+        },
+        {
+          "name": "tipo",
+          "type": "string",
+          "description": "Tipo da despesa: Fixa ou Variável",
+          "required": true
+        },
+        {
+          "name": "parcelado",
+          "type": "boolean",
+          "description": "Se a despesa é parcelada",
+          "required": true
+        },
+        {
+          "name": "parcelas",
+          "type": "number",
+          "description": "Número de parcelas",
+          "required": true
+        },
+        {
+          "name": "mes",
+          "type": "string",
+          "description": "Mês de referência (ex: 2026-08)",
+          "required": true
+        },
+        {
+          "name": "categoria",
+          "type": "string",
+          "description": "Categoria da despesa",
+          "required": true
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "description": "Data de criação do registro",
+          "required": true
+        }
+      ],
+      "access": {
+        "read": "request.auth.uid == resource.data.userId",
+        "create": "request.auth.uid == request.resource.data.userId",
+        "update": "request.auth.uid == resource.data.userId",
+        "delete": "request.auth.uid == resource.data.userId"
+      }
+    }
+  ]
+}

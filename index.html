@@ -26,6 +26,13 @@
         <div class="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
           <input type="month" id="month-filter" class="bg-transparent text-sm font-medium text-slate-700 px-3 py-1 outline-none cursor-pointer">
         </div>
+        <button id="import-btn" class="text-sm font-medium text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          <span>Recriar Dados</span>
+        </button>
+        <button id="auth-btn" class="text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+          <span>Login</span>
+        </button>
         <button id="settings-btn" class="text-slate-500 hover:text-slate-700 p-2 rounded-lg hover:bg-slate-100 transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
         </button>
@@ -37,39 +44,82 @@
 <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
   
   <!-- Dashboard Header / Overview -->
-  <div class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+  <div class="mb-8 flex flex-col justify-between items-start gap-4">
     <div>
       <h2 class="text-2xl font-bold text-slate-900">Visão Geral</h2>
-      <p class="text-sm text-slate-500 mt-1">Acompanhe seus gastos no mês selecionado.</p>
+      <p class="text-sm text-slate-500 mt-1">Acompanhe seus gastos e status de pagamentos.</p>
     </div>
-    <div class="flex flex-wrap gap-4">
-      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 min-w-[200px]">
-        <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-full">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+    
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-2.5 bg-orange-50 text-orange-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         </div>
         <div>
-          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Fixas</p>
+          <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total em aberto</p>
+          <p class="text-lg font-bold text-slate-900" id="total-aberto">R$ 0,00</p>
+        </div>
+      </div>
+      
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-2.5 bg-green-50 text-green-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        </div>
+        <div>
+          <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total pago</p>
+          <p class="text-lg font-bold text-slate-900" id="total-pago">R$ 0,00</p>
+        </div>
+      </div>
+
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-2.5 bg-blue-50 text-blue-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <div>
+          <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total geral</p>
+          <p class="text-lg font-bold text-slate-900" id="total-display">R$ 0,00</p>
+        </div>
+      </div>
+
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-2.5 bg-red-50 text-red-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+        <div>
+          <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total atrasado</p>
+          <p class="text-lg font-bold text-slate-900" id="total-atrasado">R$ 0,00</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 w-full mt-2">
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+        </div>
+        <div>
+          <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Fixo</p>
           <p class="text-lg font-bold text-slate-900" id="total-fixas">R$ 0,00</p>
         </div>
       </div>
       
-      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 min-w-[200px]">
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
         <div class="p-2.5 bg-amber-50 text-amber-600 rounded-full">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
         </div>
         <div>
-          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Variáveis</p>
+          <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Variável</p>
           <p class="text-lg font-bold text-slate-900" id="total-variaveis">R$ 0,00</p>
         </div>
       </div>
 
-      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 min-w-[200px]">
-        <div class="p-2.5 bg-red-50 text-red-600 rounded-full">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      <div class="bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-2.5 bg-pink-50 text-pink-600 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
         </div>
         <div>
-          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Geral</p>
-          <p class="text-lg font-bold text-slate-900" id="total-display">R$ 0,00</p>
+          <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Parcelado</p>
+          <p class="text-lg font-bold text-slate-900" id="total-parcelado">R$ 0,00</p>
         </div>
       </div>
     </div>
@@ -114,31 +164,32 @@
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-1">Tipo</label>
               <select id="tipo" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
-                <option value="Fixa">Fixa</option>
+                <option value="Fixa">Fixo</option>
                 <option value="Variável">Variável</option>
+                <option value="Parcelado">Parcelado</option>
               </select>
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Pagamento</label>
-              <select id="parcelado" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
-                <option value="nao">À vista</option>
-                <option value="sim">Parcelado</option>
-              </select>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Vencimento</label>
+              <input type="date" id="dataVencimento" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
             </div>
             
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Parcelas</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Parcelas (Opcional)</label>
               <input id="parcelas" type="number" min="1" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400" placeholder="1" disabled>
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Mês</label>
-              <input id="mes" type="month" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white cursor-pointer">
+              <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+              <label class="flex items-center gap-2 mt-2 cursor-pointer">
+                <input type="checkbox" id="pago" class="w-4 h-4 text-primary-600 rounded border-slate-300 focus:ring-primary-500">
+                <span class="text-sm text-slate-700">Já está pago</span>
+              </label>
             </div>
             
             <div>
@@ -162,6 +213,33 @@
       </div>
     </section>
   </div>
+
+  <!-- BOTTOM SECTION: List -->
+  <section class="mt-8">
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <h3 class="font-semibold text-slate-800">Lista de Despesas (Mês Selecionado)</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+            <tr>
+              <th class="px-6 py-3 font-medium">Status</th>
+              <th class="px-6 py-3 font-medium">Descrição</th>
+              <th class="px-6 py-3 font-medium">Vencimento</th>
+              <th class="px-6 py-3 font-medium">Tipo</th>
+              <th class="px-6 py-3 font-medium">Categoria</th>
+              <th class="px-6 py-3 font-medium text-right">Valor</th>
+              <th class="px-6 py-3 font-medium text-center">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="expenses-list" class="divide-y divide-slate-100">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </main>
 
 <!-- MODAL DE EDIÇÃO -->
@@ -188,16 +266,32 @@
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Tipo</label>
           <select id="edit-tipo" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
-            <option value="Fixa">Fixa</option>
+            <option value="Fixa">Fixo</option>
             <option value="Variável">Variável</option>
+            <option value="Parcelado">Parcelado</option>
           </select>
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
         <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Vencimento</label>
+          <input type="date" id="edit-vencimento" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
+        </div>
+        
+        <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Parcelas</label>
-          <input type="number" id="edit-parcelas" min="1" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <input type="number" id="edit-parcelas" min="1" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500" disabled>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+          <label class="flex items-center gap-2 mt-2 cursor-pointer">
+            <input type="checkbox" id="edit-pago" class="w-4 h-4 text-primary-600 rounded border-slate-300 focus:ring-primary-500">
+            <span class="text-sm text-slate-700">Pago</span>
+          </label>
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Categoria</label>
