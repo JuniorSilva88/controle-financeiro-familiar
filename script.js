@@ -265,6 +265,7 @@ const totalAtrasadoDisplay = document.getElementById('total-atrasado');
 const totalFixasDisplay = document.getElementById('total-fixas');
 const totalVariaveisDisplay = document.getElementById('total-variaveis');
 const totalParceladoDisplay = document.getElementById('total-parcelado');
+const mediaMensalDisplay = document.getElementById('media-mensal');
 
 function renderUI() {
   const lista = despesas.filter(d => d.mes === monthFilter.value);
@@ -283,6 +284,11 @@ function renderUI() {
   const totalVariaveis = lista.filter(d => d.tipo === 'Variável').reduce((acc, curr) => acc + curr.valor, 0);
   const totalParcelado = lista.filter(d => d.tipo === 'Parcelado').reduce((acc, curr) => acc + curr.valor, 0);
 
+  // Gasto Médio Mensal baseado no histórico acumulado
+  const distinctMonths = new Set(despesas.map(d => d.mes).filter(Boolean));
+  const totalHistorico = despesas.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+  const mediaMensal = distinctMonths.size > 0 ? (totalHistorico / distinctMonths.size) : 0;
+
   if (totalDisplay) totalDisplay.innerText = formatCurrency(totalGeral);
   if (totalPagoDisplay) totalPagoDisplay.innerText = formatCurrency(totalPago);
   if (totalAbertoDisplay) totalAbertoDisplay.innerText = formatCurrency(totalAberto);
@@ -291,6 +297,7 @@ function renderUI() {
   if (totalFixasDisplay) totalFixasDisplay.innerText = formatCurrency(totalFixas);
   if (totalVariaveisDisplay) totalVariaveisDisplay.innerText = formatCurrency(totalVariaveis);
   if (totalParceladoDisplay) totalParceladoDisplay.innerText = formatCurrency(totalParcelado);
+  if (mediaMensalDisplay) mediaMensalDisplay.innerText = formatCurrency(mediaMensal);
 
   renderList(lista);
   renderGrafico(lista);
@@ -304,35 +311,54 @@ function renderList(lista) {
   const formatCurrency = val => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
   [...lista].sort((a, b) => (a.dataVencimento || '').localeCompare(b.dataVencimento || '')).forEach(d => {
+    const atrasada = isAtrasado(d);
     let statusHTML = '';
+    
     if (d.pago) {
-      statusHTML = `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">Pago</span>`;
-    } else if (isAtrasado(d)) {
-      statusHTML = `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Atrasado</span>`;
+      statusHTML = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200"><svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Pago</span>`;
+    } else if (atrasada) {
+      statusHTML = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200 shadow-sm"><svg class="w-3.5 h-3.5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>Atrasado</span>`;
     } else {
-      statusHTML = `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Em aberto</span>`;
+      statusHTML = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 border border-orange-200"><svg class="w-3.5 h-3.5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Em aberto</span>`;
     }
 
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50 transition-colors';
+    tr.className = atrasada
+      ? 'bg-red-50/60 hover:bg-red-100/60 border-l-4 border-l-red-500 transition-colors'
+      : 'hover:bg-slate-50 transition-colors';
     
     // Split YYYY-MM-DD back to DD/MM/YYYY
     const dataVencObj = (d.dataVencimento || '').split('-');
     const dataStr = dataVencObj.length === 3 ? `${dataVencObj[2]}/${dataVencObj[1]}/${dataVencObj[0]}` : (d.dataVencimento || 'Sem data');
 
+    const descHTML = atrasada
+      ? `<div class="flex items-center gap-2">
+          <span class="font-semibold text-red-950">${d.nome}</span>
+          <span class="inline-flex items-center text-red-600" title="Despesa em atraso!">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+          </span>
+        </div>`
+      : `<span class="font-medium text-slate-900">${d.nome}</span>`;
+
+    const vencHTML = atrasada
+      ? `<span class="inline-flex items-center gap-1.5 text-red-700 font-semibold">${dataStr} <span class="text-[10px] uppercase font-bold bg-red-200/80 text-red-800 px-1.5 py-0.5 rounded">Vencida</span></span>`
+      : `<span class="text-slate-500">${dataStr}</span>`;
+
     tr.innerHTML = `
       <td class="px-6 py-4">${statusHTML}</td>
-      <td class="px-6 py-4 font-medium text-slate-900">${d.nome}</td>
-      <td class="px-6 py-4 text-slate-500">${dataStr}</td>
-      <td class="px-6 py-4 text-slate-500">${d.tipo}</td>
+      <td class="px-6 py-4">${descHTML}</td>
+      <td class="px-6 py-4">${vencHTML}</td>
+      <td class="px-6 py-4 text-slate-600">${d.tipo}</td>
       <td class="px-6 py-4">
-        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium text-white" style="background-color: ${CATEGORIAS[d.categoria] || '#999'}">
+        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-xs" style="background-color: ${CATEGORIAS[d.categoria] || '#999'}">
           ${d.categoria}
         </span>
       </td>
-      <td class="px-6 py-4 text-right font-medium text-slate-900">${formatCurrency(d.valor)}</td>
+      <td class="px-6 py-4 text-right font-bold ${atrasada ? 'text-red-700' : 'text-slate-900'}">${formatCurrency(d.valor)}</td>
       <td class="px-6 py-4 text-center">
-        <button class="edit-btn text-primary-600 hover:text-primary-800 font-medium" data-id="${d.id}">Editar</button>
+        <button class="edit-btn text-primary-600 hover:text-primary-800 font-semibold px-2 py-1 rounded hover:bg-white/80 transition-colors" data-id="${d.id}">Editar</button>
       </td>
     `;
     tbody.appendChild(tr);
