@@ -1,9 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    function getUserFamilyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId;
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /despesas/{document} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.familyId == getUserFamilyId()
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || 
+        request.resource.data.familyId == getUserFamilyId()
+      );
+    }
+    
+    
+    match /rendas/{document} {
+      allow read, update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.familyId == getUserFamilyId()
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || 
+        request.resource.data.familyId == getUserFamilyId()
+      );
+    }
+
+    match /categorias/{document} {
+      allow read, update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.familyId == getUserFamilyId()
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || 
+        request.resource.data.familyId == getUserFamilyId()
+      );
     }
   }
 }
