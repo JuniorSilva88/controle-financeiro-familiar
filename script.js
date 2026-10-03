@@ -1,14 +1,11 @@
-import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, addDoc, getDocs, query, where, updateDoc, deleteDoc, doc, Timestamp, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+import { supabase, supabaseConfigMissing } from './supabase.js';
 
 let currentUser = null;
 let currentFamilyId = null;
+let currentFamilyName = '';
+let isFamilyOwner = false;
+let processamentoUsuario = null;
+let realtimeChannelSequence = 0;
 
 const DEFAULT_CATEGORIAS = {
   Moradia: '#6366f1',
@@ -38,206 +35,421 @@ let rendasDict = {}; // { 'YYYY-MM': { id, renda1, renda2 } }
 /* ---------- AUTH E COMPARTILHAMENTO ---------- */
 const authBtn = document.getElementById('auth-btn');
 authBtn.onclick = async () => {
-  if (currentUser) {
-    await signOut(auth);
-  } else {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+  authBtn.disabled = true;
+  try {
+    if (currentUser) {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } else {
+      window.location.assign(criarUrlLogin());
+    }
+  } catch (error) {
+    console.error('Erro ao sair:', error);
+    showAlert('Não foi possível encerrar sua sessão. Tente novamente.');
+  } finally {
+    authBtn.disabled = false;
   }
 };
 
-onAuthStateChanged(auth, async (user) => {
+function processarUsuario(user) {
+  const userId = user?.id || null;
+  if (processamentoUsuario?.userId === userId) return processamentoUsuario.promise;
+
+  const promise = processarUsuarioInterno(user);
+  const operation = { userId, promise };
+  processamentoUsuario = operation;
+  promise.finally(() => {
+    if (processamentoUsuario === operation) processamentoUsuario = null;
+  }).catch((error) => {
+    console.error('Erro inesperado ao processar a sessão:', error);
+  });
+  return promise;
+}
+
+async function processarUsuarioInterno(user) {
+  if (currentUser?.id === user?.id && currentFamilyId) return;
+  await pararObservadores();
   currentUser = user;
   const profileContainer = document.getElementById('user-profile-container');
   const profileImg = document.getElementById('user-profile-img');
   
   if (user) {
-    authBtn.innerHTML = `<span>Sair</span>`;
-    authBtn.classList.replace('bg-primary-600', 'bg-slate-600');
-    authBtn.classList.replace('hover:bg-primary-700', 'hover:bg-slate-700');
+    definirEstadoAutenticacao(true);
     
     // Setup Profile Image
     if (profileContainer && profileImg) {
       profileContainer.classList.remove('hidden');
       profileContainer.classList.add('flex');
-      if (user.photoURL) {
-        profileImg.src = user.photoURL;
+      const profilePhoto = user.user_metadata?.avatar_url;
+      if (profilePhoto) {
+        profileImg.src = profilePhoto;
       } else {
-        const name = user.displayName || user.email || 'U';
+        const name = user.user_metadata?.full_name || user.email || 'U';
         profileImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`;
       }
-      profileImg.title = user.displayName || user.email || 'Perfil';
+      profileImg.title = user.user_metadata?.full_name || user.email || 'Perfil';
     }
 
-    
-    // Check Invite
-    const urlParams = new URLSearchParams(window.location.search);
-    const inviteId = urlParams.get('invite');
-    const userDocRef = doc(db, 'users', user.uid);
-    
     try {
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        currentFamilyId = userDoc.data().familyId || user.uid;
-        if (inviteId && inviteId !== currentFamilyId) {
-          showConfirm('Você recebeu um convite para participar de um novo grupo familiar. Deseja entrar? (Sua visualização atual será substituída)', async () => {
-            currentFamilyId = inviteId;
-            await updateDoc(userDocRef, { familyId: currentFamilyId });
-            window.history.replaceState({}, document.title, window.location.pathname);
-            carregar();
-          });
-        }
-      } else {
-        currentFamilyId = inviteId || user.uid;
-        await setDoc(userDocRef, {
-          familyId: currentFamilyId,
-          email: user.email,
-          createdAt: Timestamp.now()
-        });
-        if (inviteId) {
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
+      const inviteToken = new URLSearchParams(window.location.search).get('invite');
+      await prepararFamilia(user, inviteToken);
+      try {
+        await configurarCompartilhamento();
+      } catch (error) {
+        console.error('Erro ao carregar o compartilhamento da família:', error);
+        showAlert('A família foi carregada, mas não foi possível abrir as opções de convite. Verifique a configuração do Supabase.');
       }
-    } catch(e) {
-      console.error(e);
-      currentFamilyId = user.uid;
+      carregar();
+      removerConviteDaUrl();
+      await encerrarCarregamento();
+    } catch (error) {
+      console.error('Erro ao preparar os dados da família:', error);
+      currentFamilyId = null;
+      await encerrarCarregamento();
+      if (error.code === 'family/invalid-invite') removerConviteDaUrl();
+      const detail = error.message || 'Erro desconhecido ao preparar os dados da família.';
+      showRetryAlert(
+        `Sua sessão continua ativa, mas não foi possível carregar os dados da família. ${detail}`,
+        () => processarUsuario(user)
+      );
     }
-    
-    // Configure invite UI
-    const inviteInput = document.getElementById('invite-link');
-    const copyBtn = document.getElementById('copy-invite');
-    if (inviteInput && copyBtn) {
-      const inviteUrl = new URL(window.location.href);
-      inviteUrl.searchParams.set('invite', currentFamilyId);
-      inviteInput.value = inviteUrl.toString();
-      copyBtn.classList.remove('hidden');
-      copyBtn.onclick = () => {
-        navigator.clipboard.writeText(inviteInput.value);
-        const originalText = copyBtn.innerText;
-        copyBtn.innerText = 'Copiado!';
-        setTimeout(() => copyBtn.innerText = originalText, 2000);
-      };
-    }
-
-    // Migrate old records to have familyId (one-time fallback check for owner)
-    if (currentFamilyId === user.uid) {
-      migrateOldRecords(user.uid);
-    }
-
-    carregar();
   } else {
-    authBtn.innerHTML = `<span>Login</span>`;
-    authBtn.classList.replace('bg-slate-600', 'bg-primary-600');
-    authBtn.classList.replace('hover:bg-slate-700', 'hover:bg-primary-700');
+    window.location.replace(criarUrlLogin());
     despesas = [];
     currentFamilyId = null;
-    const inviteInput = document.getElementById('invite-link');
-    const copyBtn = document.getElementById('copy-invite');
-    if (inviteInput) inviteInput.value = '';
-    if (copyBtn) copyBtn.classList.add('hidden');
-
-    if (unsubscribeSnapshot) {
-      unsubscribeSnapshot();
-      unsubscribeSnapshot = null;
-    }
-    if (unsubscribeCategories) {
-      unsubscribeCategories();
-      unsubscribeCategories = null;
-    }
+    currentFamilyName = '';
+    isFamilyOwner = false;
+    limparCompartilhamento();
     userCategories = {};
     mergedCategories = { ...DEFAULT_CATEGORIAS };
     renderCategorias();
     renderUI();
-    
-    const loader = document.getElementById('initial-loader');
-    if (loader) {
-      loader.style.opacity = '0';
-      setTimeout(() => loader.classList.add('hidden'), 300);
-    }
-  }
-});
-
-async function migrateOldRecords(uid) {
-  try {
-    const qDespesas = query(collection(db, 'despesas'), where('userId', '==', uid));
-    const snap = await getDocs(qDespesas);
-    snap.forEach(d => {
-      if (!d.data().familyId) updateDoc(doc(db, 'despesas', d.id), { familyId: uid });
-    });
-    
-    const qCats = query(collection(db, 'categorias'), where('userId', '==', uid));
-    const snapCats = await getDocs(qCats);
-    snapCats.forEach(c => {
-      if (!c.data().familyId) updateDoc(doc(db, 'categorias', c.id), { familyId: uid });
-    });
-  } catch(e) {
-    console.error("Migração falhou:", e);
+    await encerrarCarregamento();
   }
 }
 
-/* ---------- STORAGE (Firebase) ---------- */
+if (supabaseConfigMissing || !supabase) {
+  window.location.replace(criarUrlLogin());
+} else {
+  supabase.auth.onAuthStateChange((_event, session) => {
+    window.setTimeout(() => processarUsuario(session?.user || null), 0);
+  });
+}
+
+function criarUrlLogin() {
+  const loginUrl = new URL('login.html', window.location.href);
+  const inviteToken = new URLSearchParams(window.location.search).get('invite');
+  if (inviteToken) loginUrl.searchParams.set('invite', inviteToken);
+  return loginUrl.toString();
+}
+
+function definirEstadoAutenticacao(autenticado) {
+  authBtn.innerHTML = `<span>${autenticado ? 'Sair' : 'Login'}</span>`;
+  authBtn.classList.toggle('bg-primary-600', !autenticado);
+  authBtn.classList.toggle('hover:bg-primary-700', !autenticado);
+  authBtn.classList.toggle('bg-slate-600', autenticado);
+  authBtn.classList.toggle('hover:bg-slate-700', autenticado);
+  const profileContainer = document.getElementById('user-profile-container');
+  if (profileContainer) profileContainer.classList.toggle('hidden', !autenticado);
+}
+
+async function prepararFamilia(user, inviteToken) {
+  const { data: membership, error: membershipError } = await supabase
+    .from('family_members')
+    .select('family_id, role')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (membershipError) throw membershipError;
+
+  let familyId = membership?.family_id;
+  if (familyId && inviteToken) {
+    showAlert('Esta conta já está vinculada a uma família e não pode entrar em outra automaticamente.');
+  } else if (!familyId && inviteToken) {
+    const { data, error } = await supabase.rpc('accept_family_invite', { p_token: inviteToken });
+    if (error) {
+      const invalidInvite = new Error('Este convite expirou, foi substituído ou já foi utilizado. Peça um novo link ao responsável.');
+      invalidInvite.code = 'family/invalid-invite';
+      throw invalidInvite;
+    }
+    const accepted = Array.isArray(data) ? data[0] : data;
+    familyId = accepted.family_id;
+    currentFamilyName = accepted.family_name;
+    isFamilyOwner = false;
+  } else if (!familyId) {
+    const familyName = await solicitarNomeFamilia();
+    if (!familyName) {
+      const error = new Error('A criação da família foi cancelada. Entre novamente para tentar de novo.');
+      error.code = 'family/setup-cancelled';
+      throw error;
+    }
+    const { data, error } = await supabase.rpc('create_family', { p_name: familyName });
+    if (error) throw error;
+    const created = Array.isArray(data) ? data[0] : data;
+    familyId = created.family_id;
+    currentFamilyName = created.family_name;
+    isFamilyOwner = true;
+  }
+
+  if (!familyId) throw new Error('Sua conta ainda não pertence a uma família. Use um convite ou crie uma família.');
+  currentFamilyId = familyId;
+  const { data: family, error: familyError } = await supabase
+    .from('families')
+    .select('name')
+    .eq('id', familyId)
+    .single();
+  if (familyError) throw familyError;
+  currentFamilyName = family.name;
+  isFamilyOwner = membership?.role === 'owner' || isFamilyOwner;
+}
+
+function solicitarNomeFamilia() {
+  const modal = document.getElementById('family-setup-modal');
+  const form = document.getElementById('family-setup-form');
+  const input = document.getElementById('family-name-input');
+  const cancelButton = document.getElementById('family-setup-cancel');
+  modal.classList.remove('hidden');
+  input.focus();
+
+  return new Promise((resolve) => {
+    const finalizar = (name) => {
+      modal.classList.add('hidden');
+      form.removeEventListener('submit', submitHandler);
+      cancelButton.removeEventListener('click', cancelHandler);
+      resolve(name);
+    };
+    const submitHandler = (event) => {
+      event.preventDefault();
+      const name = input.value.trim();
+      if (name) finalizar(name);
+    };
+    const cancelHandler = () => finalizar('');
+    form.addEventListener('submit', submitHandler);
+    cancelButton.addEventListener('click', cancelHandler);
+  });
+}
+
+async function configurarCompartilhamento() {
+  const inviteInput = document.getElementById('invite-link');
+  const copyButton = document.getElementById('copy-invite');
+  const generateButton = document.getElementById('generate-invite');
+  const familyNameLabel = document.getElementById('family-name-label');
+  const sharingHint = document.getElementById('sharing-hint');
+  familyNameLabel.textContent = currentFamilyName;
+  inviteInput.value = '';
+  copyButton.classList.add('hidden');
+  generateButton.classList.toggle('hidden', !isFamilyOwner);
+  sharingHint.textContent = isFamilyOwner
+    ? 'Gere um link seguro para convidar pessoas para esta família.'
+    : 'Somente o responsável pela família pode gerar o link de convite.';
+
+  if (!isFamilyOwner) return;
+
+  const { data: existingInvite, error: inviteError } = await supabase
+    .from('family_invites')
+    .select('token')
+    .eq('family_id', currentFamilyId)
+    .eq('active', true)
+    .maybeSingle();
+  if (inviteError) throw inviteError;
+  if (existingInvite?.token) definirLinkConvite(existingInvite.token);
+
+  generateButton.onclick = async () => {
+    generateButton.disabled = true;
+    try {
+      const { data, error } = await supabase.rpc('create_family_invite');
+      if (error) throw error;
+      const token = Array.isArray(data) ? data[0] : data;
+      definirLinkConvite(token);
+    } catch (error) {
+      console.error('Erro ao gerar convite:', error);
+      showAlert(`Não foi possível gerar o convite. ${error.message || 'Verifique a instalação do Supabase.'}`);
+    } finally {
+      generateButton.disabled = false;
+    }
+  };
+
+  copyButton.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteInput.value);
+      copyButton.textContent = 'Copiado!';
+      setTimeout(() => { copyButton.textContent = 'Copiar'; }, 2000);
+    } catch (error) {
+      console.error('Erro ao copiar o convite:', error);
+      inviteInput.focus();
+      inviteInput.select();
+      showAlert('Não foi possível copiar automaticamente. Selecione e copie o link exibido.');
+    }
+  };
+}
+
+function definirLinkConvite(token) {
+  const inviteInput = document.getElementById('invite-link');
+  const copyButton = document.getElementById('copy-invite');
+  const inviteUrl = new URL(window.location.href);
+  inviteUrl.searchParams.set('invite', token);
+  inviteInput.value = inviteUrl.toString();
+  copyButton.classList.remove('hidden');
+}
+
+function limparCompartilhamento() {
+  document.getElementById('invite-link').value = '';
+  document.getElementById('copy-invite').classList.add('hidden');
+  document.getElementById('generate-invite').classList.add('hidden');
+  document.getElementById('family-name-label').textContent = '';
+  document.getElementById('sharing-hint').textContent = 'Entre para configurar o compartilhamento familiar.';
+}
+
+function removerConviteDaUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has('invite')) return;
+  url.searchParams.delete('invite');
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+}
+
+async function pararObservadores() {
+  for (const unsubscribe of [unsubscribeSnapshot, unsubscribeCategories, unsubscribeRendas]) {
+    if (unsubscribe) await unsubscribe();
+  }
+  unsubscribeSnapshot = null;
+  unsubscribeCategories = null;
+  unsubscribeRendas = null;
+  despesas = [];
+  rendasDict = {};
+}
+
+async function encerrarCarregamento() {
+  const loader = document.getElementById('initial-loader');
+  if (!loader) return;
+  loader.style.opacity = '0';
+  setTimeout(() => loader.classList.add('hidden'), 300);
+}
+
+function databaseErrorMessage(error) {
+  if (error.code === '42501' || error.code === 'PGRST301') {
+    return 'O Supabase recusou esta operação. Verifique as políticas de segurança RLS do projeto.';
+  }
+  if (error.message?.includes('Failed to fetch')) {
+    return 'Não foi possível conectar ao Supabase. Confira a URL e a chave pública no arquivo .env.';
+  }
+  return `Não foi possível concluir a operação no Supabase. ${error.message || 'Tente novamente.'}`;
+}
+
+function expenseToRow(expense) {
+  return {
+    nome: expense.nome,
+    valor: expense.valor,
+    tipo: expense.tipo,
+    data_vencimento: expense.dataVencimento,
+    pago: expense.pago,
+    mes: expense.mes,
+    categoria: expense.categoria,
+    group_id: expense.groupId || null
+  };
+}
+
+function expenseFromRow(row) {
+  return {
+    ...row,
+    userId: row.user_id,
+    familyId: row.family_id,
+    dataVencimento: row.data_vencimento,
+    groupId: row.group_id,
+    createdAt: row.created_at
+  };
+}
+
+function listenToFamilyTable(table, onData, onError) {
+  const channelTopic = `${table}-${currentFamilyId}-${++realtimeChannelSequence}`;
+  const load = async () => {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .eq('family_id', currentFamilyId);
+    if (error) {
+      onError(error);
+      return;
+    }
+    onData(data || []);
+  };
+  load();
+  const channel = supabase
+    .channel(channelTopic)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table,
+      filter: `family_id=eq.${currentFamilyId}`
+    }, load)
+    .subscribe((status, error) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        onError(error || new Error(`Falha na atualização em tempo real: ${table}`));
+      }
+    });
+  return () => supabase.removeChannel(channel);
+}
+
+/* ---------- ARMAZENAMENTO (Supabase) ---------- */
 async function salvar(novaDespesa) {
-  if (!currentUser) return showAlert('Faça login para salvar');
+  if (!currentUser || !currentFamilyId) return showAlert('Entre em uma família para salvar despesas.');
   
   try {
-    await addDoc(collection(db, 'despesas'), {
-      ...novaDespesa,
-      userId: currentUser.uid,
-      familyId: currentFamilyId,
-      createdAt: Timestamp.now()
+    const { error } = await supabase.from('despesas').insert({
+      ...expenseToRow(novaDespesa),
+      user_id: currentUser.id,
+      family_id: currentFamilyId
     });
+    if (error) throw error;
   } catch (error) {
     console.error('Erro ao adicionar documento: ', error);
+    showAlert(databaseErrorMessage(error));
   }
 }
 
 async function atualizarDespesa(d) {
-  if (!currentUser || !d.id) return;
+  if (!currentUser || !currentFamilyId || !d.id) return;
   
   try {
-    const despesaRef = doc(db, 'despesas', d.id);
-    await updateDoc(despesaRef, {
-      nome: d.nome,
-      valor: d.valor,
-      tipo: d.tipo,
-      dataVencimento: d.dataVencimento,
-      pago: d.pago,
-      mes: d.mes,
-      categoria: d.categoria
-    });
+    const { error } = await supabase.from('despesas')
+      .update(expenseToRow(d))
+      .eq('id', d.id)
+      .eq('family_id', currentFamilyId);
+    if (error) throw error;
   } catch (error) {
     console.error('Erro ao atualizar documento: ', error);
+    showAlert(databaseErrorMessage(error));
   }
 }
 
 async function excluirDespesa(d, deleteAllRecurrences = false) {
-  if (!currentUser || !d.id) return;
+  if (!currentUser || !currentFamilyId || !d.id) return;
   
   try {
     if (deleteAllRecurrences && d.groupId) {
       // Find all expenses with the same groupId
       const related = despesas.filter(item => item.groupId === d.groupId);
-      const deletePromises = related.map(item => deleteDoc(doc(db, 'despesas', item.id)));
-      await Promise.all(deletePromises);
+      const { error } = await supabase.from('despesas')
+        .delete()
+        .eq('family_id', currentFamilyId)
+        .in('id', related.map(item => item.id));
+      if (error) throw error;
     } else {
-      await deleteDoc(doc(db, 'despesas', d.id));
+      const { error } = await supabase.from('despesas')
+        .delete()
+        .eq('id', d.id)
+        .eq('family_id', currentFamilyId);
+      if (error) throw error;
     }
   } catch (error) {
     console.error('Erro ao excluir documento(s): ', error);
+    showAlert(databaseErrorMessage(error));
   }
 }
 
 function carregar() {
-  if (!currentUser) return;
+  if (!currentUser || !currentFamilyId) return;
   
-  // Load expenses
-  const qDespesas = query(collection(db, 'despesas'), where('familyId', '==', currentFamilyId));
-  
-  unsubscribeSnapshot = onSnapshot(qDespesas, (snapshot) => {
-    despesas = [];
-    snapshot.forEach((doc) => {
-      despesas.push({ id: doc.id, ...doc.data() });
-    });
+  unsubscribeSnapshot = listenToFamilyTable('despesas', (rows) => {
+    despesas = rows.map(expenseFromRow);
     renderUI();
     
     const loader = document.getElementById('initial-loader');
@@ -247,18 +459,12 @@ function carregar() {
     }
   }, (error) => {
     console.error('Erro ao buscar dados: ', error);
+    showAlert(databaseErrorMessage(error));
   });
 
-  // Load custom categories
-  const qCats = query(collection(db, 'categorias'), where('familyId', '==', currentFamilyId));
-  unsubscribeCategories = onSnapshot(qCats, (snapshot) => {
+  unsubscribeCategories = listenToFamilyTable('categorias', (rows) => {
     userCategories = {};
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      userCategories[data.nome] = { id: doc.id, cor: data.cor };
-    });
-    
-    // Merge
+    rows.forEach((row) => { userCategories[row.nome] = { id: row.id, cor: row.cor }; });
     mergedCategories = { ...DEFAULT_CATEGORIAS };
     for (const [name, catData] of Object.entries(userCategories)) {
       mergedCategories[name] = catData.cor;
@@ -268,21 +474,18 @@ function carregar() {
     if (chart) renderUI(); // Re-render to update colors if needed
   }, (error) => {
     console.error('Erro ao buscar categorias: ', error);
+    showAlert(databaseErrorMessage(error));
   });
 
-  // Load rendas
-  const qRendas = query(collection(db, 'rendas'), where('familyId', '==', currentFamilyId));
-  unsubscribeRendas = onSnapshot(qRendas, (snapshot) => {
+  unsubscribeRendas = listenToFamilyTable('rendas', (rows) => {
     rendasDict = {};
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      if (data.mes) {
-        rendasDict[data.mes] = { id: docSnap.id, renda1: data.renda1 || 0, renda2: data.renda2 || 0 };
-      }
+    rows.forEach((row) => {
+      if (row.mes) rendasDict[row.mes] = { id: row.id, renda1: row.renda1 || 0, renda2: row.renda2 || 0 };
     });
     renderUI();
   }, (error) => {
     console.error('Erro ao buscar rendas: ', error);
+    showAlert(databaseErrorMessage(error));
   });
 }
 
@@ -291,19 +494,26 @@ function renderCategorias() {
   // Update Dropdowns
   const selectAdd = document.getElementById('categoria');
   const selectEdit = document.getElementById('edit-categoria');
-  
+
   if (selectAdd && selectEdit) {
     const currentValueAdd = selectAdd.value;
     const currentValueEdit = selectEdit.value;
-    
+
     selectAdd.innerHTML = '';
     selectEdit.innerHTML = '';
-    
+
     Object.keys(mergedCategories).sort().forEach(cat => {
-      selectAdd.insertAdjacentHTML('beforeend', `<option value="${cat}">${cat}</option>`);
-      selectEdit.insertAdjacentHTML('beforeend', `<option value="${cat}">${cat}</option>`);
+      const optionAdd = document.createElement('option');
+      optionAdd.value = cat;
+      optionAdd.textContent = cat;
+      selectAdd.appendChild(optionAdd);
+
+      const optionEdit = document.createElement('option');
+      optionEdit.value = cat;
+      optionEdit.textContent = cat;
+      selectEdit.appendChild(optionEdit);
     });
-    
+
     if (mergedCategories[currentValueAdd]) selectAdd.value = currentValueAdd;
     if (mergedCategories[currentValueEdit]) selectEdit.value = currentValueEdit;
   }
@@ -315,27 +525,57 @@ function renderCategorias() {
     Object.keys(mergedCategories).sort().forEach(cat => {
       const isCustom = !!userCategories[cat];
       const color = mergedCategories[cat];
-      
-      let deleteBtnHtml = '';
+
+      const item = document.createElement('li');
+      item.className = 'flex justify-between items-center px-4 py-2 hover:bg-white transition-colors group';
+
+      const leftContent = document.createElement('div');
+      leftContent.className = 'flex items-center gap-3';
+
+      const colorDot = document.createElement('span');
+      colorDot.className = 'w-4 h-4 rounded-full';
+      colorDot.style.backgroundColor = color;
+
+      const label = document.createElement('span');
+      label.className = 'text-sm font-medium text-slate-700';
+      label.textContent = cat;
+
+      leftContent.append(colorDot, label);
+      item.appendChild(leftContent);
+
       if (isCustom) {
-        deleteBtnHtml = `
-          <button onclick="excluirCategoria('${userCategories[cat].id}', '${cat}')" class="text-slate-400 hover:text-red-500 p-1 rounded transition-colors" title="Excluir categoria">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-          </button>
-        `;
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'text-slate-400 hover:text-red-500 p-1 rounded transition-colors';
+        deleteBtn.title = 'Excluir categoria';
+        deleteBtn.setAttribute('aria-label', `Excluir categoria ${cat}`);
+        deleteBtn.addEventListener('click', () => {
+          window.excluirCategoria(userCategories[cat].id, cat);
+        });
+
+        const deleteIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        deleteIcon.setAttribute('class', 'w-4 h-4');
+        deleteIcon.setAttribute('fill', 'none');
+        deleteIcon.setAttribute('stroke', 'currentColor');
+        deleteIcon.setAttribute('viewBox', '0 0 24 24');
+
+        const deletePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        deletePath.setAttribute('stroke-linecap', 'round');
+        deletePath.setAttribute('stroke-linejoin', 'round');
+        deletePath.setAttribute('stroke-width', '2');
+        deletePath.setAttribute('d', 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16');
+
+        deleteIcon.appendChild(deletePath);
+        deleteBtn.appendChild(deleteIcon);
+        item.appendChild(deleteBtn);
       } else {
-        deleteBtnHtml = `<span class="text-[10px] text-slate-400 font-medium uppercase px-2">Padrão</span>`;
+        const defaultBadge = document.createElement('span');
+        defaultBadge.className = 'text-[10px] text-slate-400 font-medium uppercase px-2';
+        defaultBadge.textContent = 'Padrão';
+        item.appendChild(defaultBadge);
       }
 
-      catList.insertAdjacentHTML('beforeend', `
-        <li class="flex justify-between items-center px-4 py-2 hover:bg-white transition-colors group">
-          <div class="flex items-center gap-3">
-            <span class="w-4 h-4 rounded-full" style="background-color: ${color}"></span>
-            <span class="text-sm font-medium text-slate-700">${cat}</span>
-          </div>
-          ${deleteBtnHtml}
-        </li>
-      `);
+      catList.appendChild(item);
     });
   }
 }
@@ -344,9 +584,14 @@ function renderCategorias() {
 window.excluirCategoria = async (docId, catName) => {
   showConfirm(`Excluir a categoria "${catName}"?`, async () => {
     try {
-      await deleteDoc(doc(db, 'categorias', docId));
-    } catch(e) {
-      console.error("Erro ao excluir categoria:", e);
+      const { error } = await supabase.from('categorias')
+        .delete()
+        .eq('id', docId)
+        .eq('family_id', currentFamilyId);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Erro ao excluir categoria:', error);
+      showAlert(databaseErrorMessage(error));
     }
   });
 };
@@ -358,7 +603,7 @@ document.getElementById('close-settings').onclick = () => settingsModal.classLis
 
 document.getElementById('add-category-form').onsubmit = async (e) => {
   e.preventDefault();
-  if (!currentUser) return;
+  if (!currentUser || !currentFamilyId) return showAlert('Entre em uma família para criar categorias.');
 
   const nameInput = document.getElementById('new-cat-name');
   const colorInput = document.getElementById('new-cat-color');
@@ -375,31 +620,74 @@ document.getElementById('add-category-form').onsubmit = async (e) => {
   }
 
   try {
-    await addDoc(collection(db, 'categorias'), {
+    const { error } = await supabase.from('categorias').insert({
       nome: name,
       cor: color,
-      userId: currentUser.uid,
-      familyId: currentFamilyId,
-      createdAt: Timestamp.now()
+      user_id: currentUser.id,
+      family_id: currentFamilyId
     });
+    if (error) throw error;
     nameInput.value = '';
     // Color input keeps its value
   } catch (error) {
     console.error('Erro ao adicionar categoria:', error);
-    showAlert('Erro ao criar categoria.');
+    showAlert(databaseErrorMessage(error));
   }
 };
 
 function showAlert(msg) {
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4';
+
   const box = document.createElement('div');
   box.className = 'bg-white rounded-xl shadow-xl p-6 w-full max-w-sm text-center';
-  box.innerHTML = `
-    <p class="text-slate-800 dark:text-slate-200 font-medium mb-6">${msg}</p>
-    <button class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg w-full transition-colors">OK</button>
-  `;
-  box.querySelector('button').onclick = () => overlay.remove();
+
+  const message = document.createElement('p');
+  message.className = 'text-slate-800 dark:text-slate-200 font-medium mb-6';
+  message.textContent = msg;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg w-full transition-colors';
+  button.textContent = 'OK';
+  button.addEventListener('click', () => overlay.remove());
+
+  box.append(message, button);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+function showRetryAlert(msg, onRetry) {
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4';
+
+  const box = document.createElement('div');
+  box.className = 'bg-white rounded-xl shadow-xl p-6 w-full max-w-sm text-center';
+
+  const message = document.createElement('p');
+  message.className = 'text-slate-800 dark:text-slate-200 font-medium mb-6';
+  message.textContent = msg;
+
+  const actions = document.createElement('div');
+  actions.className = 'flex gap-3';
+
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg transition-colors';
+  closeButton.textContent = 'Fechar';
+  closeButton.addEventListener('click', () => overlay.remove());
+
+  const retryButton = document.createElement('button');
+  retryButton.type = 'button';
+  retryButton.className = 'flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors';
+  retryButton.textContent = 'Tentar novamente';
+  retryButton.addEventListener('click', () => {
+    overlay.remove();
+    onRetry();
+  });
+
+  actions.append(closeButton, retryButton);
+  box.append(message, actions);
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 }
@@ -407,33 +695,58 @@ function showAlert(msg) {
 function showConfirm(msg, onConfirm, withRecurrence = false) {
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4';
+
   const box = document.createElement('div');
   box.className = 'bg-white rounded-xl shadow-xl p-6 w-full max-w-sm text-center';
-  
-  let extraHtml = '';
-  if (withRecurrence) {
-    extraHtml = `
-      <label class="flex items-center gap-2 mt-4 mb-6 cursor-pointer text-left bg-red-50 p-3 rounded-lg border border-red-100">
-        <input type="checkbox" id="delete-recurrences" class="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500">
-        <span class="text-sm text-red-800">Excluir também todas as outras parcelas/repetições desta(s) despesa(s)</span>
-      </label>
-    `;
-  }
 
-  box.innerHTML = `
-    <p class="text-slate-800 dark:text-slate-200 font-medium ${withRecurrence ? 'mb-2' : 'mb-6'}">${msg}</p>
-    ${extraHtml}
-    <div class="flex gap-3 justify-center">
-      <button id="custom-confirm-cancel" class="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg transition-colors">Cancelar</button>
-      <button id="custom-confirm-ok" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors">Confirmar</button>
-    </div>
-  `;
-  box.querySelector('#custom-confirm-cancel').onclick = () => overlay.remove();
-  box.querySelector('#custom-confirm-ok').onclick = () => {
-    const isChecked = withRecurrence ? box.querySelector('#delete-recurrences').checked : false;
+  const message = document.createElement('p');
+  message.className = `text-slate-800 dark:text-slate-200 font-medium ${withRecurrence ? 'mb-2' : 'mb-6'}`;
+  message.textContent = msg;
+
+  const actions = document.createElement('div');
+  actions.className = 'flex gap-3 justify-center';
+
+  let recurrenceCheckbox = null;
+
+  const cancelButton = document.createElement('button');
+  cancelButton.type = 'button';
+  cancelButton.id = 'custom-confirm-cancel';
+  cancelButton.className = 'flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg transition-colors';
+  cancelButton.textContent = 'Cancelar';
+  cancelButton.addEventListener('click', () => overlay.remove());
+
+  const confirmButton = document.createElement('button');
+  confirmButton.type = 'button';
+  confirmButton.id = 'custom-confirm-ok';
+  confirmButton.className = 'flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors';
+  confirmButton.textContent = 'Confirmar';
+  confirmButton.addEventListener('click', () => {
+    const isChecked = withRecurrence && recurrenceCheckbox ? recurrenceCheckbox.checked : false;
     overlay.remove();
     onConfirm(isChecked);
-  };
+  });
+
+  actions.append(cancelButton, confirmButton);
+
+  if (withRecurrence) {
+    const recurrenceLabel = document.createElement('label');
+    recurrenceLabel.className = 'flex items-center gap-2 mt-4 mb-6 cursor-pointer text-left bg-red-50 p-3 rounded-lg border border-red-100';
+
+    recurrenceCheckbox = document.createElement('input');
+    recurrenceCheckbox.type = 'checkbox';
+    recurrenceCheckbox.id = 'delete-recurrences';
+    recurrenceCheckbox.className = 'w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500';
+
+    const recurrenceText = document.createElement('span');
+    recurrenceText.className = 'text-sm text-red-800';
+    recurrenceText.textContent = 'Excluir também todas as outras parcelas/repetições desta(s) despesa(s)';
+
+    recurrenceLabel.append(recurrenceCheckbox, recurrenceText);
+    box.append(message, recurrenceLabel, actions);
+  } else {
+    box.append(message, actions);
+  }
+
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 }
@@ -668,25 +981,39 @@ function renderUI() {
       const cat = d.categoria || 'Outros';
       catTotals[cat] = (catTotals[cat] || 0) + d.valor;
     });
-    
-    // Sort by amount descending
+
     const sortedCats = Object.keys(catTotals).sort((a, b) => catTotals[b] - catTotals[a]);
-    
+
     sortedCats.forEach(cat => {
       const color = mergedCategories[cat] || '#94a3b8';
-      categoryContainer.insertAdjacentHTML('beforeend', `
-        <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 px-4 py-3 rounded-lg flex-1 min-w-[200px]">
-          <div class="w-3 h-3 rounded-full flex-shrink-0 shadow-sm" style="background-color: ${color}"></div>
-          <div class="flex-1">
-            <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${cat}</p>
-            <p class="text-base font-bold text-slate-900 dark:text-white">${formatCurrency(catTotals[cat])}</p>
-          </div>
-        </div>
-      `);
+      const item = document.createElement('div');
+      item.className = 'flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 px-4 py-3 rounded-lg flex-1 min-w-[200px]';
+
+      const dot = document.createElement('div');
+      dot.className = 'w-3 h-3 rounded-full flex-shrink-0 shadow-sm';
+      dot.style.backgroundColor = color;
+
+      const meta = document.createElement('div');
+      meta.className = 'flex-1';
+
+      const catLabel = document.createElement('p');
+      catLabel.className = 'text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider';
+      catLabel.textContent = cat;
+
+      const catTotal = document.createElement('p');
+      catTotal.className = 'text-base font-bold text-slate-900 dark:text-white';
+      catTotal.textContent = formatCurrency(catTotals[cat]);
+
+      meta.append(catLabel, catTotal);
+      item.append(dot, meta);
+      categoryContainer.appendChild(item);
     });
-    
+
     if (sortedCats.length === 0) {
-      categoryContainer.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400 py-2 w-full text-center">Nenhuma despesa neste mês.</p>';
+      const emptyState = document.createElement('p');
+      emptyState.className = 'text-sm text-slate-500 dark:text-slate-400 py-2 w-full text-center';
+      emptyState.textContent = 'Nenhuma despesa neste mês.';
+      categoryContainer.appendChild(emptyState);
     }
   }
 
@@ -698,69 +1025,150 @@ function renderList(lista) {
   const tbody = document.getElementById('expenses-list');
   if (!tbody) return;
   tbody.innerHTML = '';
-  
+
   const formatCurrency = val => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
   [...lista].sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
     const atrasada = isAtrasado(d);
-    let statusHTML = '';
-    
-    if (d.pago) {
-      statusHTML = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200"><svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Pago</span>`;
-    } else if (atrasada) {
-      statusHTML = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200 shadow-sm"><svg class="w-3.5 h-3.5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>Atrasado</span>`;
-    } else {
-      statusHTML = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 border border-orange-200"><svg class="w-3.5 h-3.5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Em aberto</span>`;
-    }
-
     const tr = document.createElement('tr');
     tr.className = atrasada
       ? 'bg-red-50/60 hover:bg-red-100/60 border-l-4 border-l-red-500 transition-colors'
       : 'hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-700/50';
-    
-    // Split YYYY-MM-DD back to DD/MM/YYYY
+
     const dataVencObj = (d.dataVencimento || '').split('-');
     const dataStr = dataVencObj.length === 3 ? `${dataVencObj[2]}/${dataVencObj[1]}/${dataVencObj[0]}` : (d.dataVencimento || 'Sem data');
 
-    const descHTML = atrasada
-      ? `<div class="flex items-center gap-2">
-          <span class="font-semibold text-red-950">${d.nome}</span>
-          <span class="inline-flex items-center text-red-600" title="Despesa em atraso!">
-            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-            </svg>
-          </span>
-        </div>`
-      : `<span class="font-medium text-slate-900 dark:text-white">${d.nome}</span>`;
+    const checkboxCell = document.createElement('td');
+    checkboxCell.className = 'px-6 py-4 text-center';
+    const rowCheckbox = document.createElement('input');
+    rowCheckbox.type = 'checkbox';
+    rowCheckbox.className = 'row-checkbox w-4 h-4 text-primary-600 rounded border-slate-300 focus:ring-primary-500 cursor-pointer';
+    rowCheckbox.dataset.id = d.id;
+    checkboxCell.appendChild(rowCheckbox);
+    tr.appendChild(checkboxCell);
 
-    const vencHTML = atrasada
-      ? `<span class="inline-flex items-center gap-1.5 text-red-700 font-semibold">${dataStr} <span class="text-[10px] uppercase font-bold bg-red-200/80 text-red-800 px-1.5 py-0.5 rounded">Vencida</span></span>`
-      : `<span class="text-slate-500 dark:text-slate-400">${dataStr}</span>`;
+    const statusCell = document.createElement('td');
+    statusCell.className = 'px-6 py-4';
+    const statusBadge = document.createElement('span');
+    statusBadge.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border';
+    if (d.pago) {
+      statusBadge.className += ' bg-green-100 text-green-700 border-green-200';
+      const statusIcon = document.createElement('span');
+      statusIcon.textContent = '✓';
+      statusBadge.appendChild(statusIcon);
+      statusBadge.appendChild(document.createTextNode('Pago'));
+    } else if (atrasada) {
+      statusBadge.className += ' gap-1.5 bg-red-100 text-red-700 border-red-200 shadow-sm font-bold';
+      const statusIcon = document.createElement('span');
+      statusIcon.textContent = '!';
+      statusBadge.appendChild(statusIcon);
+      statusBadge.appendChild(document.createTextNode('Atrasado'));
+    } else {
+      statusBadge.className += ' bg-orange-100 text-orange-700 border-orange-200';
+      const statusIcon = document.createElement('span');
+      statusIcon.textContent = '◔';
+      statusBadge.appendChild(statusIcon);
+      statusBadge.appendChild(document.createTextNode('Em aberto'));
+    }
+    statusCell.appendChild(statusBadge);
+    tr.appendChild(statusCell);
 
-    tr.innerHTML = `
-      <td class="px-6 py-4 text-center">
-        <input type="checkbox" class="row-checkbox w-4 h-4 text-primary-600 rounded border-slate-300 focus:ring-primary-500 cursor-pointer" data-id="${d.id}">
-      </td>
-      <td class="px-6 py-4">${statusHTML}</td>
-      <td class="px-6 py-4">${descHTML}</td>
-      <td class="px-6 py-4">${vencHTML}</td>
-      <td class="px-6 py-4 text-slate-600">${d.tipo}</td>
-      <td class="px-6 py-4">
-        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-xs" style="background-color: ${mergedCategories[d.categoria] || '#94a3b8'}">
-          ${d.categoria}
-        </span>
-      </td>
-      <td class="px-6 py-4 text-right font-bold ${atrasada ? 'text-red-700' : 'text-slate-900 dark:text-white'}">${formatCurrency(d.valor)}</td>
-      <td class="px-6 py-4 text-center">
-        <div class="flex items-center justify-center gap-3">
-          <label class="flex items-center gap-1.5 cursor-pointer" title="Marcar como pago">
-            <input type="checkbox" class="toggle-pago-btn w-4 h-4 text-green-600 rounded border-slate-300 focus:ring-green-500" data-id="${d.id}" ${d.pago ? 'checked' : ''}>
-            <span class="text-[11px] font-semibold uppercase text-slate-500 dark:text-slate-400">Pago</span>
-          </label>
-          <button class="edit-btn text-primary-600 hover:text-primary-800 font-semibold px-2 py-1 rounded hover:bg-slate-100 transition-colors" data-id="${d.id}">Editar</button>
-        </div>
-      </td>
-    `;
+    const descriptionCell = document.createElement('td');
+    descriptionCell.className = 'px-6 py-4';
+    if (atrasada) {
+      const descWrap = document.createElement('div');
+      descWrap.className = 'flex items-center gap-2';
+
+      const descText = document.createElement('span');
+      descText.className = 'font-semibold text-red-950';
+      descText.textContent = d.nome;
+      descWrap.appendChild(descText);
+
+      const warningIcon = document.createElement('span');
+      warningIcon.className = 'inline-flex items-center text-red-600';
+      warningIcon.title = 'Despesa em atraso!';
+      warningIcon.textContent = '!';
+      descWrap.appendChild(warningIcon);
+      descriptionCell.appendChild(descWrap);
+    } else {
+      const descText = document.createElement('span');
+      descText.className = 'font-medium text-slate-900 dark:text-white';
+      descText.textContent = d.nome;
+      descriptionCell.appendChild(descText);
+    }
+    tr.appendChild(descriptionCell);
+
+    const vencCell = document.createElement('td');
+    vencCell.className = 'px-6 py-4';
+    if (atrasada) {
+      const vencWrap = document.createElement('span');
+      vencWrap.className = 'inline-flex items-center gap-1.5 text-red-700 font-semibold';
+      vencWrap.textContent = dataStr;
+
+      const dueBadge = document.createElement('span');
+      dueBadge.className = 'text-[10px] uppercase font-bold bg-red-200/80 text-red-800 px-1.5 py-0.5 rounded';
+      dueBadge.textContent = 'Vencida';
+      vencWrap.appendChild(dueBadge);
+      vencCell.appendChild(vencWrap);
+    } else {
+      const vencText = document.createElement('span');
+      vencText.className = 'text-slate-500 dark:text-slate-400';
+      vencText.textContent = dataStr;
+      vencCell.appendChild(vencText);
+    }
+    tr.appendChild(vencCell);
+
+    const typeCell = document.createElement('td');
+    typeCell.className = 'px-6 py-4 text-slate-600';
+    typeCell.textContent = d.tipo;
+    tr.appendChild(typeCell);
+
+    const categoryCell = document.createElement('td');
+    categoryCell.className = 'px-6 py-4';
+    const categoryBadge = document.createElement('span');
+    categoryBadge.className = 'inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-xs';
+    categoryBadge.style.backgroundColor = mergedCategories[d.categoria] || '#94a3b8';
+    categoryBadge.textContent = d.categoria;
+    categoryCell.appendChild(categoryBadge);
+    tr.appendChild(categoryCell);
+
+    const valueCell = document.createElement('td');
+    valueCell.className = `px-6 py-4 text-right font-bold ${atrasada ? 'text-red-700' : 'text-slate-900 dark:text-white'}`;
+    valueCell.textContent = formatCurrency(d.valor);
+    tr.appendChild(valueCell);
+
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'px-6 py-4 text-center';
+
+    const actionWrap = document.createElement('div');
+    actionWrap.className = 'flex items-center justify-center gap-3';
+
+    const label = document.createElement('label');
+    label.className = 'flex items-center gap-1.5 cursor-pointer';
+    label.title = 'Marcar como pago';
+
+    const paidCheckbox = document.createElement('input');
+    paidCheckbox.type = 'checkbox';
+    paidCheckbox.className = 'toggle-pago-btn w-4 h-4 text-green-600 rounded border-slate-300 focus:ring-green-500';
+    paidCheckbox.dataset.id = d.id;
+    paidCheckbox.checked = !!d.pago;
+
+    const paidText = document.createElement('span');
+    paidText.className = 'text-[11px] font-semibold uppercase text-slate-500 dark:text-slate-400';
+    paidText.textContent = 'Pago';
+
+    label.append(paidCheckbox, paidText);
+
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className = 'edit-btn text-primary-600 hover:text-primary-800 font-semibold px-2 py-1 rounded hover:bg-slate-100 transition-colors';
+    editButton.dataset.id = d.id;
+    editButton.textContent = 'Editar';
+
+    actionWrap.append(label, editButton);
+    actionsCell.appendChild(actionWrap);
+    tr.appendChild(actionsCell);
+
     tbody.appendChild(tr);
   });
 
@@ -840,10 +1248,14 @@ function renderList(lista) {
             idsToDelete = [...new Set([...idsToDelete, ...extraIds])];
           }
 
-          const deletePromises = idsToDelete.map(id => deleteDoc(doc(db, 'despesas', id)));
-          await Promise.all(deletePromises);
+          const { error } = await supabase.from('despesas')
+            .delete()
+            .eq('family_id', currentFamilyId)
+            .in('id', idsToDelete);
+          if (error) throw error;
         } catch (error) {
           console.error('Erro ao excluir em lote:', error);
+          showAlert(databaseErrorMessage(error));
         }
       }, hasRecurrences);
     };
@@ -1142,18 +1554,18 @@ async function saveRendas() {
   const renda1 = Number(document.getElementById('renda-1').value) || 0;
   const renda2 = Number(document.getElementById('renda-2').value) || 0;
   
-  const docId = `${currentFamilyId}_${mes}`;
-  
   try {
-    await setDoc(doc(db, 'rendas', docId), {
+    const { error } = await supabase.from('rendas').upsert({
       mes,
       renda1,
       renda2,
-      familyId: currentFamilyId,
-      userId: currentUser.uid
-    }, { merge: true });
+      family_id: currentFamilyId,
+      user_id: currentUser.id
+    }, { onConflict: 'family_id,mes' });
+    if (error) throw error;
   } catch (error) {
     console.error('Erro ao salvar rendas: ', error);
+    showAlert(databaseErrorMessage(error));
   }
 }
 

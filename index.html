@@ -433,6 +433,22 @@
   </div>
 </div>
 
+<!-- CONFIGURAÇÃO INICIAL DA FAMÍLIA -->
+<div id="family-setup-modal" class="fixed inset-0 z-[250] hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md p-6">
+    <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Crie sua família</h2>
+    <p class="text-sm text-slate-600 dark:text-slate-400 mb-5">Escolha um nome para identificar o grupo familiar que compartilhará as despesas.</p>
+    <form id="family-setup-form" class="flex flex-col gap-4">
+      <label for="family-name-input" class="text-sm font-medium text-slate-700 dark:text-slate-300">Nome da família</label>
+      <input id="family-name-input" type="text" maxlength="80" required placeholder="Ex.: Família Silva" class="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500">
+      <div class="flex justify-end gap-3">
+        <button id="family-setup-cancel" type="button" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg">Cancelar</button>
+        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">Continuar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- MODAL DE CONFIGURAÇÕES -->
 <div id="settings-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
   <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
@@ -494,11 +510,14 @@
 
       <!-- Family Sharing -->
       <div>
-        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Compartilhamento Familiar</label>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Compartilhe este link para que outras pessoas acessem as mesmas contas que você.</p>
+        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Família: <span id="family-name-label" class="font-normal"></span></label>
+        <p id="sharing-hint" class="text-xs text-slate-500 dark:text-slate-400 mb-4">Entre para configurar o compartilhamento familiar.</p>
         
         <div class="flex gap-2">
-          <input type="text" id="invite-link" class="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 cursor-text" readonly placeholder="Faça login para gerar">
+          <input type="text" id="invite-link" class="flex-1 min-w-0 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 cursor-text" readonly placeholder="Gere um link de convite">
+          <button id="generate-invite" type="button" class="bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors hidden">
+            Gerar link
+          </button>
           <button id="copy-invite" class="bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors hidden">
             Copiar
           </button>

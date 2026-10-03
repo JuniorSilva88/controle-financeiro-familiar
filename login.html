@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101b35">
+  <title>Entrar | Finanças Familiar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-showcase" aria-label="Apresentação do Finanças Familiar">
+      <a class="login-brand" href="./login.html" aria-label="Finanças Familiar, página inicial">
+        <span class="login-brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M16 3.5 27 9.75v12.5L16 28.5 5 22.25V9.75L16 3.5Z" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M20.5 11.5c-.8-.9-2.1-1.4-4-1.4-2.5 0-4.1 1.1-4.1 2.8 0 4.2 8.2 1.7 8.2 5.3 0 1.8-1.6 3-4.2 3-1.9 0-3.5-.6-4.5-1.8M16.4 8v16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span>finanças<span class="login-brand-light"> familiar</span></span>
+      </a>
+
+      <div class="login-showcase-copy">
+        <span class="login-eyebrow"><span></span> CUIDAR JUNTOS FAZ DIFERENÇA</span>
+        <h1>Planos em família.<br><span>Conquistas de verdade.</span></h1>
+        <p>Organize as despesas da casa, acompanhe o mês e tome decisões com todo mundo na mesma página.</p>
+
+        <div class="login-preview" aria-hidden="true">
+          <div class="login-preview-top">
+            <div>
+              <span class="login-preview-caption">RESUMO DA FAMÍLIA</span>
+              <strong>Seu mês, mais leve.</strong>
+            </div>
+            <span class="login-preview-menu">•••</span>
+          </div>
+          <div class="login-preview-balance">
+            <span>Despesas organizadas</span>
+            <strong><i>✓</i> Tudo em um só lugar</strong>
+          </div>
+          <div class="login-preview-chart">
+            <span style="--bar-height: 38%"></span>
+            <span style="--bar-height: 57%"></span>
+            <span style="--bar-height: 47%"></span>
+            <span style="--bar-height: 76%"></span>
+            <span style="--bar-height: 60%"></span>
+            <span style="--bar-height: 91%"></span>
+            <span style="--bar-height: 68%"></span>
+            <span style="--bar-height: 82%"></span>
+            <span style="--bar-height: 54%"></span>
+            <span style="--bar-height: 100%"></span>
+            <span style="--bar-height: 73%"></span>
+            <span style="--bar-height: 88%"></span>
+          </div>
+          <div class="login-preview-bottom">
+            <span><i class="login-dot login-dot-blue"></i> Despesas da casa</span>
+            <span><i class="login-dot login-dot-mint"></i> Metas compartilhadas</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="login-showcase-footer">
+        <span>Mais clareza para o presente.</span>
+        <span>Mais planos para o futuro.</span>
+      </div>
+    </section>
+
+    <section class="login-panel">
+      <div class="login-panel-content">
+        <div class="login-mobile-brand">
+          <span class="login-brand-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <path d="M16 3.5 27 9.75v12.5L16 28.5 5 22.25V9.75L16 3.5Z" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M20.5 11.5c-.8-.9-2.1-1.4-4-1.4-2.5 0-4.1 1.1-4.1 2.8 0 4.2 8.2 1.7 8.2 5.3 0 1.8-1.6 3-4.2 3-1.9 0-3.5-.6-4.5-1.8M16.4 8v16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span>finanças familiar</span>
+        </div>
+
+        <div class="login-heading">
+          <span class="login-heading-kicker">BEM-VINDO(A)</span>
+          <h2 id="login-heading">Seu lar financeiro começa aqui.</h2>
+          <p id="login-description">Entre com seu e-mail e senha para acessar o painel da sua família.</p>
+        </div>
+
+        <form id="email-auth-form" class="login-auth-form">
+          <label for="login-email">E-mail</label>
+          <input id="login-email" type="email" autocomplete="email" required placeholder="voce@exemplo.com">
+          <label for="login-password">Senha</label>
+          <input id="login-password" type="password" autocomplete="current-password" minlength="6" required placeholder="Sua senha">
+          <p id="password-help" class="login-password-help">Use a senha cadastrada nesta conta.</p>
+          <button id="email-submit" class="google-login-button" type="submit">
+            <span>Entrar com e-mail</span>
+            <span class="google-login-arrow" aria-hidden="true">→</span>
+          </button>
+        </form>
+        <button id="auth-mode-toggle" class="login-mode-toggle" type="button">Não tem uma conta? Criar conta</button>
+
+        <div id="login-error" class="login-error" role="alert" aria-live="polite" hidden></div>
+        <div id="login-progress" class="login-progress" role="status" aria-live="polite" hidden>
+          <span class="login-spinner" aria-hidden="true"></span>
+          <span>Conectando com segurança...</span>
+        </div>
+
+        <div class="login-divider"><span>ACESSO SEGURO</span></div>
+
+        <div class="login-security-note">
+          <span class="login-lock-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="4.5" y="10" width="15" height="11" rx="2.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M8 10V7a4 4 0 1 1 8 0v3m-4 4v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <p>Seus dados são protegidos e separados dos dados de outras famílias.</p>
+        </div>
+
+        <p class="login-help">Ao continuar, você concorda em usar o sistema para organizar as finanças da sua família.</p>
+      </div>
+      <footer class="login-panel-footer">
+        <span>CONTROLE SIMPLES. VIDA MAIS TRANQUILA.</span>
+        <span>© 2026 Finanças Familiar</span>
+      </footer>
+    </section>
+  </main>
+  <script type="module" src="login.js"></script>
+</body>
+</html>
