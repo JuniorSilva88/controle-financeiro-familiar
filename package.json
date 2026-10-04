@@ -2,7 +2,6 @@
   "name": "controle-financeiro",
   "version": "1.0.0",
   "description": "Dashboard de Despesas",
-  "main": "server.js",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -14,7 +13,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
-    "express": "^4.21.0"
+    "highcharts": "12.4.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

@@ -1,61 +1,79 @@
-# Relatório real da auditoria e das alterações
+# Relatório de migração, segurança e publicação
 
-**Atualizado em:** 27/09/2026
-**Estado:** URL e chave pública configuradas somente no `.env` local; conexão com o serviço Auth confirmada; o aviso do Database Linter confirma que as funções do schema inicial existem no projeto remoto; a migration de hardening e a configuração de senha ainda estão pendentes.
+**Atualizado em:** 04/10/2026
+**Aplicação:** [Finanças Familiar](https://controle-financeiro-familiar-dusky-one.vercel.app)
+**Hospedagem:** Vercel
+**Backend:** projeto Supabase `Despesas-Familiar`
 
-## Implementado nesta migração
+## Estado atual
 
-- Substituído o login Google/Firebase por cadastro e autenticação com e-mail e senha no Supabase Auth.
-- A tela de entrada permite alternar entre entrar e criar uma conta e preserva o token do convite durante confirmação por e-mail.
-- Substituído o acesso a despesas, categorias, rendas e convites por consultas ao Supabase/PostgreSQL.
-- Criado [supabase-schema.sql](./supabase-schema.sql) com tabelas, índices, funções para criação de família/convite, políticas RLS e inscrição das tabelas no Realtime.
-- O schema SQL atualizado define as funções `SECURITY DEFINER` no schema não exposto `private`; o app usa wrappers `SECURITY INVOKER` no schema público. Para o banco remoto que já executou a versão inicial, foi preparado [supabase-security-hardening.sql](./supabase-security-hardening.sql). Essa migração ainda não foi executada no projeto remoto.
-- Mantido o modelo de uma família por conta, com convites aleatórios e dados isolados por `family_id`.
-- A URL e a chave pública informadas foram guardadas somente em `.env`; o arquivo está ignorado pelo Git. [.env.example](./.env.example) contém valores vazios de exemplo.
-- Removidos do código os arquivos e dependências do Firebase. Os dados já armazenados no Firebase **não são apagados**, mas também **não são transferidos** para o Supabase. A migração de dados antigos não foi solicitada.
+- A aplicação foi migrada de Firebase/Firestore para Supabase Auth e PostgreSQL.
+- O painel e a tela de login estão publicados na Vercel. O build de produção foi reportado como concluído com sucesso e o usuário confirmou que a tela de login passou a abrir após a configuração multi-page do Vite.
+- O frontend exige `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. A URL deve ser HTTP(S), e somente a chave pública anon/publishable pode ser usada no navegador.
+- Dados remotos do Firebase não foram apagados nem migrados automaticamente.
+- O fluxo de criar conta, entrar, criar família, convidar outro usuário e validar isolamento RLS entre duas contas ainda precisa de testes funcionais dedicados.
 
-## Configuração necessária antes de usar
+## Migração e arquitetura
 
-1. Executar [supabase-security-hardening.sql](./supabase-security-hardening.sql) no SQL Editor, pois o schema inicial já está presente no projeto indicado pelo aviso do linter.
-2. Configurar a URL de redirecionamento de confirmação de e-mail em **Authentication > URL Configuration** (incluindo `http://localhost:3000/login.html`).
-3. Ativar **Authentication > Password Security > Leaked password protection**.
-4. Reiniciar o servidor Vite após qualquer alteração em `.env`.
+- Supabase Auth substituiu o login Firebase.
+- Tabelas PostgreSQL cobrem famílias, membros, convites, despesas, categorias e rendas.
+- Os dados de aplicação são associados a `family_id` e protegidos por Row Level Security.
+- As funções privilegiadas estão no schema não exposto `private`; wrappers RPC públicos usam `SECURITY INVOKER`.
+- O Realtime atualiza despesas, categorias e rendas.
+- Vite está configurado como build multi-page, com `index.html` e `login.html` como entradas independentes; a saída é `dist/`.
+- O Highcharts está fixado em `12.4.0` no lockfile e incluído no bundle local, sem baixar scripts executáveis do CDN em tempo de execução.
 
-Nenhuma chave `service_role` deve ser colocada no navegador ou no repositório. Sem as etapas acima, a tela informa que falta configurar o Supabase e as operações de dados não estarão disponíveis.
+## Revisão de segurança antes da publicação
 
-O alerta do Supabase Auth sobre proteção contra senhas vazadas exige uma configuração no painel: **Authentication > Password Security > Leaked password protection**. Não pode ser habilitado pelo schema SQL deste projeto.
+Foi feita uma revisão focada no frontend publicado: segredos, XSS/injeção DOM, autenticação/sessão, acesso Supabase/RLS e recursos externos.
 
-## Achados de segurança
+| Achado | Severidade | Estado | Tratamento |
+|---|---|---|---|
+| Highcharts carregado de URLs CDN mutáveis, sem versão fixada nem SRI (`index.html`) | Média | Corrigido localmente em 04/10/2026 | Dependência `highcharts@12.4.0` exata no npm; removidos os dois scripts CDN do HTML e importados pelo bundle do Vite. |
+| Inserção de dados controlados pelo usuário no DOM | Alta (histórico) | Corrigido | Categorias, mensagens e linhas de despesas usam criação de elementos e `textContent` em vez de interpolação de conteúdo fornecido pelo usuário em HTML. |
+| Dependência Express não utilizada trazia versões vulneráveis de `qs` | Moderada | Corrigido localmente em 04/10/2026 | Express foi removido; a aplicação Vercel é estática e usa Vite Preview localmente. O campo obsoleto `main: server.js` também foi removido. |
 
-### XSS persistente em valores compartilhados — corrigido
+A correção do Highcharts precisa ser incluída no próximo commit/deploy para passar a proteger a versão hospedada. A revisão não encontrou outras vulnerabilidades acionáveis no escopo analisado. Isso não equivale a teste de penetração nem a uma certificação de segurança do serviço Supabase.
 
-- **Severidade:** Alta
-- **Confiança:** 9/10
-- **Estado:** corrigido em 03/10/2026
-- **Arquivo:** [script.js](./script.js)
+### Testes/verificações de segurança realizados
 
-Os dados controlados por usuários nas categorias, mensagens e linhas de despesas agora são inseridos por APIs seguras do DOM, como `textContent`, em vez de serem interpolados em HTML. A alteração foi validada com `node --check script.js` e `git diff --check`.
+- Busca no código versionado por `service_role`, secret keys e credenciais administrativas expostas no frontend.
+- Busca por padrões conhecidos de execução/inserção dinâmica de HTML no JavaScript.
+- Inspeção das configurações RLS, funções Supabase e uso de sessão pelo cliente.
+- Revisão de dependência externa de scripts e mitigação do Highcharts por empacotamento local com versão exata.
+- Auditoria de dependências npm: a primeira execução encontrou dois avisos moderados em `qs`, dependência transitiva do Express não utilizado. Express foi removido; nova execução de `npm audit` encontrou zero vulnerabilidades.
+- `node --check` nos módulos JS alterados e `git diff --check`.
 
-**Validação adicional recomendada:** testar no navegador nomes de despesas e categorias com caracteres HTML para confirmar a renderização literal.
+## Validação técnica e limitações
 
-## Verificações e limitações
+- Os módulos JavaScript alterados passaram em `node --check`.
+- `npm audit`: aprovado, zero vulnerabilidades conhecidas no grafo atual de dependências.
+- `npm run build` executado com Node.js 24.21.0: aprovado; o bundle gera `dist/index.html`, `dist/login.html` e empacota Highcharts localmente.
+- `git diff --check`: aprovado após revisão da documentação.
+- Configuração Vite multi-page e JSON da Vercel foram revisados; a configuração define `index.html` e `login.html` como entradas.
+- O build anterior na Vercel terminou com `✓ built` e `Deployment completed`, antes desta atualização. A correção atual precisa de novo deploy para ser aplicada no domínio.
+- O Node.js padrão deste ambiente é 18, abaixo dos requisitos de Vite/Rolldown; a validação do build foi executada com Node.js 24.21.0.
+- O novo deploy deve ser conferido para garantir que o bundle publicado inclui Highcharts localmente e que ambos os documentos HTML são servidos.
+- Não foram executados testes reais com contas familiares independentes para confirmar autorização, fluxo de convite ou isolamento RLS.
+- A migration `supabase-security-hardening.sql` não foi confirmada como executada no projeto remoto; verificar o estado real antes de aplicá-la.
+- A configuração de proteção contra senhas vazadas depende do plano e das opções disponíveis no projeto Supabase; verificar no painel.
 
-- A dependência `@supabase/supabase-js` foi adicionada ao projeto.
-- `node --check` para `login.js`, `script.js` e `supabase.js`: aprovado.
-- `npm run build -- --outDir /tmp/controle-financeiro-supabase-build`: aprovado.
-- `git diff --check`: aprovado.
-- A página de login local reconhece a configuração Supabase e habilita o formulário.
-- Consulta de sessão ao Supabase Auth respondeu sem erro; ainda não existe sessão de usuário.
-- O redirecionamento do painel para a tela de login foi validado preservando o token de convite.
-- O fluxo real de cadastro, login, criação de família, convite e isolamento RLS ainda não pôde ser testado porque não foi criada uma conta de teste.
-- O SQL de hardening foi preparado para executar no projeto existente. Não foi executado remotamente; o linter ainda precisa ser reexecutado depois da migração.
-- A proteção contra senhas vazadas continua pendente da ativação manual no painel do Supabase.
-- Os dados antigos do Firestore permanecem no projeto Firebase original; nenhuma operação de exclusão ou migração remota foi feita.
+## Configuração operacional
+
+- Vercel: definir `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` para Production (e Preview se usado), depois executar novo deploy quando mudarem.
+- Supabase: configurar **Site URL** e **Redirect URLs** para o domínio de produção `https://controle-financeiro-familiar-dusky-one.vercel.app`.
+- Não colocar `service_role`, secret keys ou credenciais administrativas no frontend, em variáveis `VITE_*` ou no repositório.
+- Manter o schema `private` fora de **Exposed schemas** da Data API.
+
+## Dados do Firebase
+
+Os dados existentes no Firestore continuam no projeto Firebase original. Nenhuma exclusão remota foi feita. A migração de dados exige backup/exportação e transformação para associar cada despesa aos campos obrigatórios `family_id` e `user_id` do novo banco. Só excluir o banco antigo depois de confirmar o backup e a importação.
 
 ## Histórico
 
 | Data | Atualização |
 |---|---|
-| 27/09/2026 | Auditoria inicial identificou XSS persistente em dados compartilhados. |
-| 27/09/2026 | Criadas tela de login, famílias e convites; o login Firebase foi substituído por Supabase Auth e as operações de banco por PostgreSQL/RLS. Criado schema SQL e documentada a configuração pendente. Nenhum dado remoto do Firebase foi apagado ou copiado. XSS continua pendente. |
-| 27/09/2026 | Preparada migration para mover funções `SECURITY DEFINER` para `private`, fora do Data API, mantendo RPCs públicos `SECURITY INVOKER`. Registrado que a migration ainda precisa ser executada e que a proteção contra senhas vazadas precisa ser habilitada no painel. |
+| 27/09/2026 | Auditoria inicial; substituição do Firebase pelo Supabase; criação de autenticação, schema SQL, famílias e convites. |
+| 03/10/2026 | Correções de XSS por construção segura do DOM e ajustes de sessão/Realtime; criação da configuração de build da Vercel. |
+| 04/10/2026 | Corrigido build multi-page para publicar `login.html`; diagnosticada URL do Supabase inválida na configuração da Vercel. |
+| 04/10/2026 | Revisão pré-publicação identificou scripts Highcharts mutáveis via CDN; pacote fixado e incorporado no build local, aguardando deploy. README e relatório atualizados. |

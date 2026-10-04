@@ -1,4 +1,6 @@
 import { supabase, supabaseConfigMissing } from './supabase.js';
+import Highcharts from 'highcharts';
+import 'highcharts/highcharts-3d';
 
 let currentUser = null;
 let currentFamilyId = null;
