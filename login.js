@@ -1,4 +1,4 @@
-import { supabase, supabaseConfigMissing } from './supabase.js';
+import { supabase, supabaseConfigError, supabaseConfigMissing } from './supabase.js';
 
 const authForm = document.getElementById('email-auth-form');
 const emailInput = document.getElementById('login-email');
@@ -72,7 +72,7 @@ modeToggle.addEventListener('click', () => {
 });
 
 if (supabaseConfigMissing || !supabase) {
-  setError('Falta configurar o Supabase. Copie .env.example para .env, preencha a URL do projeto e a chave pública (anon/publishable) e reinicie o servidor.');
+  setError(`${supabaseConfigError || 'A configuração do Supabase está incompleta.'} Na Vercel, confira VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY e publique um novo deploy.`);
   submitButton.disabled = true;
 } else {
   supabase.auth.getSession().then(({ data, error }) => {

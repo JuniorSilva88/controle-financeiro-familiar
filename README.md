@@ -73,6 +73,8 @@ Este projeto foi construído utilizando as seguintes tecnologias:
 3. Faça o deploy. Se alterar variáveis depois, faça um novo deploy para que elas sejam incorporadas ao build.
 4. No Supabase, em **Authentication > URL Configuration**, defina **Site URL** como o domínio de produção atribuído pela Vercel e inclua esse domínio nos **Redirect URLs**. Inclua também os domínios Preview que pretende usar para testar confirmação de e-mail e convites.
 
+`VITE_SUPABASE_URL` deve ser somente a URL HTTP(S) mostrada no painel do Supabase (formato `https://<project-ref>.supabase.co`), sem texto adicional, chaves ou espaços. Se a URL estiver inválida, a tela de login exibirá uma mensagem de configuração e o formulário ficará desabilitado até um novo deploy com a variável corrigida.
+
 Se a versão anterior de `supabase-schema.sql` já foi executada, rode `supabase-security-hardening.sql` no SQL Editor para mover as funções privilegiadas para `private` sem recriar as tabelas.
 
 Para compartilhar, crie uma conta e informe o nome da família após entrar. O responsável pode gerar o link em **Configurações**; outras pessoas criam suas próprias contas e entram pelo convite. Cada conta pode pertencer a uma única família.
